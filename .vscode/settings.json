@@ -1,0 +1,4 @@
+{
+    "ansible.executionEnvironment.containerEngine": "podman",
+    "ansible.python.interpreterPath": "/bin/python"
+}
