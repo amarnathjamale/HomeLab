@@ -1,0 +1,7 @@
+---
+# defaults file for zsh
+fzf_git_url: https://github.com/junegunn/fzf.git
+fzf_local_path: "{{ ansible_env.HOME }}/.fzf"
+zoxide_download_url: "https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh"
+zoxide_download_path: "{{ ansible_env.HOME }}/zoxide_install.sh"
+zsh_package_name: zsh

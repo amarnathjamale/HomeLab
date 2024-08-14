@@ -1,0 +1,44 @@
+---
+# tasks file for zsh
+- name: Install package
+  ansible.builtin.package:
+    name: "{{ zsh_package_name }}"
+    state: present
+  become: true
+
+- name: Clone fzf
+  ansible.builtin.git:
+    repo: "{{ fzf_git_url }}"
+    clone: true
+    dest: "{{ fzf_local_path }}"
+
+- name: Install fzf
+  ansible.builtin.shell:
+    cmd: "{{ ansible_env.HOME }}/.fzf/install"
+
+- name: Download script using wget
+  ansible.builtin.get_url:
+    url: "{{ zoxide_download_url }}"
+    dest: "{{ zoxide_download_path }}"
+    mode: "0755"
+
+- name: Execute the script
+  ansible.builtin.shell:
+    cmd: "{{ zoxide_download_path }}"
+    executable: "/bin/sh"
+
+- name: Copy zsh config
+  ansible.builtin.copy:
+    src: "files/zshrc"
+    dest: "{{ ansible_env.HOME }}/.zshrc"
+
+- name: Copy p10k profile
+  ansible.builtin.copy:
+    src: "files/p10k.zsh"
+    dest: "{{ ansible_env.HOME }}/.p10k.zsh"
+
+- name: Set zsh as defaults shell
+  ansible.builtin.user:
+    name: "{{ ansible_env.USER }}"
+    shell: "/bin/zsh"
+  become: true
