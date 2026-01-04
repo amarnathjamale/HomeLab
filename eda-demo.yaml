@@ -24,3 +24,47 @@ spec:
       cpu: 500m
       memory: 512Mi
 
+Solution: Use Main Branch Operator
+
+  The single-command install with release 1.0.2 won't work for PG 15. You need to use main branch:
+
+  # 1. Delete existing operator and namespace
+  kubectl delete ns eda-server-operator-system --ignore-not-found=true
+
+  # 2. Create namespace
+  kubectl create namespace eda
+
+  # 3. Install operator from MAIN branch (not release)
+  mkdir -p /tmp/eda-operator
+  cat > /tmp/eda-operator/kustomization.yaml << 'EOF'
+  apiVersion: kustomize.config.k8s.io/v1beta1
+  kind: Kustomization
+  resources:
+    - github.com/ansible/eda-server-operator/config/default?ref=main
+  images:
+    - name: quay.io/ansible/eda-server-operator
+      newTag: main
+  namespace: eda
+  EOF
+
+  kubectl apply -k /tmp/eda-operator/
+
+  # 4. Wait for operator
+  kubectl wait --for=condition=Available deployment/eda-server-operator-controller-manager -n eda --timeout=120s
+
+  # 5. Deploy EDA (note: namespace is 'eda' now, not 'eda-server-operator-system')
+  cat <<EOF | kubectl apply -f -
+  apiVersion: eda.ansible.com/v1alpha1
+  kind: EDA
+  metadata:
+    name: eda
+    namespace: eda
+  spec:
+    automation_server_url: http://awx-service.awx.svc.cluster.local:80
+    service_type: NodePort
+    nodeport_port: 30081
+  EOF
+
+  # 6. Verify PG 15
+  kubectl get pods -n eda | grep postgres
+
