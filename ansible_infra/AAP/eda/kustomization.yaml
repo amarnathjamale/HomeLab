@@ -5,9 +5,10 @@ kind: Kustomization
 namespace: eda
 
 resources:
-  - github.com/ansible/eda-server-operator/config/default?ref=main
+  # Using 1.0.2 operator for working activations
+  - github.com/ansible/eda-server-operator/config/default?ref=1.0.2
   - admin-password-secret.yaml
 
 images:
   - name: quay.io/ansible/eda-server-operator
-    newTag: main
+    newTag: 1.0.2

@@ -18,8 +18,11 @@ spec:
   service_type: NodePort
   nodeport_port: 30081
 
-  # Image configuration (using main branch for latest fixes)
+  # Image configuration - hardcoded working versions
+  # Server: sha-559b1fb (from 1.0.2 operator, working activations)
   image: quay.io/ansible/eda-server
-  image_version: main
+  image_version: sha-559b1fb
+
+  # UI: latest (Jan 2026, working web interface)
   image_web: quay.io/ansible/eda-ui
-  image_web_version: main
+  image_web_version: latest
