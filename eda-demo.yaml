@@ -90,3 +90,27 @@ Solution: Use Main Branch Operator
       action:
         print_event:
           pretty: true
+
+----
+
+  -- First, find the stuck activation IDs
+  SELECT id, name, status FROM core_activation WHERE status IN ('pending', 'pending_delete');
+
+  -- Delete from related tables first (replace <id> with actual IDs, or use subquery)
+  DELETE FROM core_activationinstance WHERE activation_id IN (SELECT id FROM core_activation WHERE status IN ('pending', 'pending_delete'));
+
+  DELETE FROM core_activationinstancelog WHERE activation_instance_id IN (SELECT id FROM core_activationinstance WHERE activation_id IN (SELECT id FROM core_activation WHERE status IN ('pending', 'pending_delete')));
+
+  DELETE FROM core_activation_eda_credentials WHERE activation_id IN (SELECT id FROM core_activation WHERE status IN ('pending', 'pending_delete'));
+
+  DELETE FROM core_rulebookprocess WHERE activation_id IN (SELECT id FROM core_activation WHERE status IN ('pending', 'pending_delete'));
+
+  DELETE FROM core_auditaction WHERE activation_id IN (SELECT id FROM core_activation WHERE status IN ('pending', 'pending_delete'));
+
+  DELETE FROM core_auditrule WHERE activation_id IN (SELECT id FROM core_activation WHERE status IN ('pending', 'pending_delete'));
+
+  -- Now delete the activations
+  DELETE FROM core_activation WHERE status IN ('pending', 'pending_delete');
+
+  -- Verify clean
+  SELECT id, name, status FROM core_activation;
