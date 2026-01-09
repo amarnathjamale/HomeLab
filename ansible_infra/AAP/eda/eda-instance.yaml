@@ -23,5 +23,6 @@ spec:
   image: quay.io/ansible/eda-server
   image_version: sha-559b1fb
 
-  # UI: pinned by digest (Jan 2026)
-  image_web: quay.io/ansible/eda-ui@sha256:0d2975a32e53db0d71240b39de283382dc406d6e53aa71c85fa7574b088ec030
+  # UI: latest stable (Jan 2026)
+  image_web: quay.io/ansible/eda-ui
+  image_web_version: latest
