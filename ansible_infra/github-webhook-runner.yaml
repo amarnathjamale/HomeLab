@@ -1,0 +1,58 @@
+---
+# GitHub Webhook Runner - Listens for GitHub webhooks and triggers AWX jobs
+#
+# USAGE:
+#   1. Create ConfigMap: kubectl create configmap github-webhook-rulebook -n eda --from-file=github-webhook-rulebook.yaml --from-file=demo-inventory.yaml
+#   2. kubectl apply -f github-webhook-runner.yaml
+#   3. Test: kubectl exec -n eda deployment/eda-api -- curl -X POST http://github-webhook-runner:5000/endpoint -H "Content-Type: application/json" -d '{"ref":"refs/heads/main","after":"abc123"}'
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: github-webhook-runner
+  namespace: eda
+  labels:
+    app: github-webhook-runner
+spec:
+  restartPolicy: Always
+  containers:
+  - name: ansible-rulebook
+    image: quay.io/ansible/ansible-rulebook:v1.1.1
+    ports:
+    - containerPort: 5000
+      name: webhook
+    env:
+    - name: EDA_CONTROLLER_URL
+      value: "http://awx-demo-service.awx.svc.cluster.local"
+    - name: EDA_CONTROLLER_TOKEN
+      value: "qOyZyOHWDut5zHo7wNzdVfmBYHKBVW"
+    - name: EDA_CONTROLLER_SSL_VERIFY
+      value: "no"
+    command: ["ansible-rulebook"]
+    args:
+      - --rulebook
+      - /rulebooks/github-webhook-rulebook.yaml
+      - --inventory
+      - /rulebooks/demo-inventory.yaml
+      - -vv
+    volumeMounts:
+    - name: rulebook-volume
+      mountPath: /rulebooks
+  volumes:
+  - name: rulebook-volume
+    configMap:
+      name: github-webhook-rulebook
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: github-webhook-runner
+  namespace: eda
+spec:
+  selector:
+    app: github-webhook-runner
+  ports:
+  - port: 5000
+    targetPort: 5000
+    name: webhook
+  type: ClusterIP

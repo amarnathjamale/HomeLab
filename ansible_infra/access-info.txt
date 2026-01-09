@@ -1,0 +1,45 @@
+AWX and EDA Deployment - Access Information
+============================================
+
+ACCESS VIA PORT-FORWARD
+-----------------------
+Run in separate terminals:
+
+Terminal 1 - AWX:
+  kubectl port-forward svc/awx-demo-service -n awx 8080:80
+
+Terminal 2 - EDA:
+  kubectl port-forward svc/eda-ui -n eda 8081:80
+
+CREDENTIALS
+-----------
+
+AWX:
+  Username: admin
+  Password: P4dqLbZezZsVGlqaiILxApSz2MJMwngh
+  Port: 30080 (NodePort)
+
+EDA:
+  Username: admin
+  Password: RW6XAuL67nsqhtBryO2kjEOzlMOJXBNu
+  Port: 30081 (NodePort)
+
+USEFUL COMMANDS
+---------------
+# Check AWX pods
+kubectl get pods -n awx
+
+# Check EDA pods
+kubectl get pods -n eda
+
+# View AWX logs
+kubectl logs -f deployment/awx-web -n awx
+
+# View EDA logs
+kubectl logs -f deployment/eda-api -n eda
+
+# Get AWX admin password
+kubectl get secret awx-demo-admin-password -n awx -o jsonpath='{.data.password}' | base64 -d
+
+# Get EDA admin password
+kubectl get secret eda-admin-password -n eda -o jsonpath='{.data.password}' | base64 -d

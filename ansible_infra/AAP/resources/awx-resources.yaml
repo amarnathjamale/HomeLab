@@ -1,0 +1,221 @@
+---
+# AWX Resources ConfigMap
+# Contains all AWX resources to be created via API
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: awx-resources
+  namespace: awx
+data:
+  # Organization
+  organization.json: |
+    {
+      "name": "Demo Organization",
+      "description": "Example organization for demos"
+    }
+
+  # Team
+  team.json: |
+    {
+      "name": "DevOps Team",
+      "description": "DevOps engineers team",
+      "organization": 1
+    }
+
+  # User
+  user.json: |
+    {
+      "username": "demouser",
+      "password": "demopass123",
+      "email": "demo@example.com",
+      "first_name": "Demo",
+      "last_name": "User"
+    }
+
+  # Machine Credential
+  credential-machine.json: |
+    {
+      "name": "Demo Machine Credential",
+      "description": "SSH credential for demo hosts",
+      "organization": 1,
+      "credential_type": 1,
+      "inputs": {
+        "username": "ansible",
+        "password": "ansible123"
+      }
+    }
+
+  # SCM Credential
+  credential-scm.json: |
+    {
+      "name": "Demo SCM Credential",
+      "description": "Git credential for source control",
+      "organization": 1,
+      "credential_type": 2,
+      "inputs": {
+        "username": "git",
+        "password": "gitpassword"
+      }
+    }
+
+  # Vault Credential
+  credential-vault.json: |
+    {
+      "name": "Demo Vault Credential",
+      "description": "Ansible Vault password",
+      "organization": 1,
+      "credential_type": 3,
+      "inputs": {
+        "vault_password": "vaultpass123"
+      }
+    }
+
+  # Project
+  project.json: |
+    {
+      "name": "Demo Ansible Project",
+      "description": "Sample playbooks for demos",
+      "organization": 1,
+      "scm_type": "git",
+      "scm_url": "https://github.com/ansible/ansible-tower-samples",
+      "scm_branch": "master"
+    }
+
+  # Inventory
+  inventory.json: |
+    {
+      "name": "Demo Inventory",
+      "description": "Demo hosts inventory",
+      "organization": 1
+    }
+
+  # Inventory Group
+  group.json: |
+    {
+      "name": "webservers",
+      "description": "Web server hosts",
+      "inventory": 1
+    }
+
+  # Host
+  host.json: |
+    {
+      "name": "localhost",
+      "description": "Local execution host",
+      "inventory": 1,
+      "variables": "ansible_connection: local"
+    }
+
+  # Host 2
+  host2.json: |
+    {
+      "name": "webserver1.example.com",
+      "description": "Primary web server",
+      "inventory": 1,
+      "variables": "ansible_host: 192.168.1.10\nansible_user: ansible"
+    }
+
+  # Job Template
+  job-template.json: |
+    {
+      "name": "Demo Job Template",
+      "description": "Simple hello world playbook",
+      "organization": 1,
+      "project": 6,
+      "playbook": "hello_world.yml",
+      "inventory": 1,
+      "job_type": "run"
+    }
+
+  # Job Template with Survey
+  job-template-survey.json: |
+    {
+      "name": "Hello World Job",
+      "description": "Hello world with survey",
+      "organization": 1,
+      "project": 6,
+      "playbook": "hello_world.yml",
+      "inventory": 1,
+      "job_type": "run",
+      "survey_enabled": true
+    }
+
+  # Survey Spec
+  survey-spec.json: |
+    {
+      "name": "Demo Survey",
+      "description": "Example survey",
+      "spec": [
+        {
+          "question_name": "Target Environment",
+          "question_description": "Select the target environment",
+          "required": true,
+          "type": "multiplechoice",
+          "variable": "target_env",
+          "choices": ["dev", "staging", "prod"],
+          "default": "dev"
+        }
+      ]
+    }
+
+  # Workflow Job Template
+  workflow.json: |
+    {
+      "name": "Demo Workflow",
+      "description": "Example workflow with multiple steps",
+      "organization": 1
+    }
+
+  # Schedule
+  schedule.json: |
+    {
+      "name": "Daily Hello World",
+      "description": "Run hello world daily at 9am",
+      "rrule": "DTSTART:20260105T090000Z RRULE:FREQ=DAILY;INTERVAL=1",
+      "enabled": false
+    }
+
+  # Notification Template
+  notification.json: |
+    {
+      "name": "Email Notification",
+      "description": "Send email on job completion",
+      "organization": 1,
+      "notification_type": "email",
+      "notification_configuration": {
+        "host": "smtp.example.com",
+        "port": 587,
+        "username": "awx@example.com",
+        "password": "emailpass",
+        "sender": "awx@example.com",
+        "recipients": ["admin@example.com"],
+        "use_tls": true,
+        "use_ssl": false
+      }
+    }
+
+  # Execution Environment
+  execution-environment.json: |
+    {
+      "name": "Demo Execution Environment",
+      "description": "Custom EE for demos",
+      "organization": 1,
+      "image": "quay.io/ansible/awx-ee:latest"
+    }
+
+  # OAuth Application
+  application.json: |
+    {
+      "name": "EDA Application",
+      "description": "OAuth app for EDA integration",
+      "organization": 1,
+      "authorization_grant_type": "password",
+      "client_type": "confidential"
+    }
+
+  # Token for EDA
+  token.json: |
+    {
+      "description": "EDA Integration Token",
+      "scope": "write"
+    }

@@ -1,0 +1,13 @@
+---
+- name: Trigger AWX Demo
+  hosts: all
+  sources:
+    - ansible.eda.range:
+        limit: 3
+  rules:
+    - name: Trigger AWX Job on event
+      condition: event.i == 1
+      action:
+        run_job_template:
+          name: Demo Job Template
+          organization: Default

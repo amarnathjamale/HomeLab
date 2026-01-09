@@ -1,0 +1,40 @@
+---
+# GitHub Webhook Rulebook
+# Listens for GitHub webhooks and triggers AWX jobs
+#
+- name: GitHub Webhook Handler
+  hosts: all
+  sources:
+    - ansible.eda.webhook:
+        host: 0.0.0.0
+        port: 5000
+  rules:
+    - name: Deploy on push to main
+      condition: event.payload.ref is defined and event.payload.ref == "refs/heads/main"
+      action:
+        run_job_template:
+          name: Demo Job Template
+          organization: Default
+          job_args:
+            extra_vars:
+              triggered_by: "GitHub push to main"
+              commit_sha: "{{ event.payload.after | default('unknown') }}"
+              repository: "{{ event.payload.repository.full_name | default('unknown') }}"
+
+    - name: Handle pull request opened
+      condition: event.payload.action is defined and event.payload.action == "opened" and event.payload.pull_request is defined
+      action:
+        run_job_template:
+          name: Demo Job Template
+          organization: Default
+          job_args:
+            extra_vars:
+              triggered_by: "GitHub PR opened"
+              pr_number: "{{ event.payload.pull_request.number }}"
+              pr_title: "{{ event.payload.pull_request.title }}"
+
+    - name: Log all events
+      condition: event.payload is defined
+      action:
+        print_event:
+          pretty: true

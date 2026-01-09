@@ -1,0 +1,28 @@
+---
+# Timed Rulebook - Triggers after 5 minutes and launches AWX job template
+#
+# This rulebook uses ansible.eda.tick to generate events every 60 seconds.
+# After 5 ticks (5 minutes), it triggers the AWX job template.
+#
+- name: Timed Job Trigger
+  hosts: all
+  sources:
+    - ansible.eda.tick:
+        delay: 60  # Generate event every 60 seconds
+  rules:
+    - name: Trigger AWX job after 5 minutes
+      condition: event.tick.count == 5
+      action:
+        run_job_template:
+          name: Demo Job Template
+          organization: Default
+          job_args:
+            extra_vars:
+              triggered_by: "EDA timed rulebook"
+              tick_count: "{{ event.tick.count }}"
+
+    - name: Log each tick
+      condition: event.tick.count >= 1
+      action:
+        print_event:
+          pretty: true

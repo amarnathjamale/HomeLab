@@ -1,0 +1,39 @@
+---
+# AWX Instance Configuration
+# Deploy after operator is ready
+apiVersion: awx.ansible.com/v1beta1
+kind: AWX
+metadata:
+  name: awx
+  namespace: awx
+spec:
+  # Service configuration
+  service_type: NodePort
+  nodeport_port: 30080
+
+  # Resource limits (optional - adjust based on your cluster)
+  # web_resource_requirements:
+  #   requests:
+  #     cpu: 100m
+  #     memory: 128Mi
+  #   limits:
+  #     cpu: 1000m
+  #     memory: 2Gi
+
+  # task_resource_requirements:
+  #   requests:
+  #     cpu: 100m
+  #     memory: 128Mi
+  #   limits:
+  #     cpu: 1000m
+  #     memory: 2Gi
+
+  # PostgreSQL configuration
+  postgres_storage_class: standard
+  postgres_storage_requirements:
+    requests:
+      storage: 8Gi
+
+  # Admin user configuration
+  admin_user: admin
+  # admin_password_secret: awx-admin-password  # Optional: use existing secret

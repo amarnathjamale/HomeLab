@@ -1,0 +1,43 @@
+# EDA Demo Deployment - Single Command Install
+#
+# DEPLOYMENT:
+#   1. kubectl apply -f https://github.com/ansible/eda-server-operator/releases/latest/download/operator.yaml
+#   2. kubectl apply -f eda-demo.yaml
+#   3. minikube service eda-ui -n eda-server-operator-system
+#
+# GET PASSWORD:
+#   kubectl get secret eda-admin-password -n eda-server-operator-system -o jsonpath='{.data.password}' | base64 -d
+#
+---
+apiVersion: eda.ansible.com/v1alpha1
+kind: EDA
+metadata:
+  name: eda
+  namespace: eda-server-operator-system
+spec:
+  # AWX connection
+  automation_server_url: http://awx-demo-service.awx.svc.cluster.local:80
+
+  # Service exposure
+  service_type: NodePort
+  nodeport_port: 30081
+
+  # EDA Server (SHA-based versioning only)
+  image: quay.io/ansible/eda-server
+  image_version: "sha-ad278f8"
+
+  # EDA UI
+  image_web: quay.io/ansible/eda-ui
+  image_web_version: "2.6.4"
+
+  # PostgreSQL 15 (override default PG 13 in operator 1.0.2)
+  postgres_image: quay.io/sclorg/postgresql-15-c9s
+  postgres_image_version: "latest"
+  postgres_storage_requirements: 8Gi
+  postgres_resource_requirements:
+    requests:
+      cpu: 50m
+      memory: 100Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi

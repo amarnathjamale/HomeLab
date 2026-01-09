@@ -1,0 +1,46 @@
+# EDA Complete Deployment for Minikube
+#
+# ISSUES WE FACED AND SOLUTIONS:
+# ==============================
+#
+# 1. EDA UI showing "Welcome to nginx!" default page
+#    - CAUSE: EDA operator 1.0.2 used eda-ui:2.4.x image which had UI files in
+#      /opt/app-root/ui/eda/ but nginx config pointed to /usr/share/nginx/html
+#    - FIX: Updated to operator main branch which uses eda-ui:main with files
+#      in correct location
+#
+# 2. EDA UI showing "AnsibleDev" instead of "Event-Driven Ansible"
+#    - CAUSE: Old eda-ui:2.4.x image was a generic "ansible-ui" without EDA branding
+#    - FIX: Use newer eda-ui:2.6.4 or main tag which has proper EDA branding
+#
+# 3. No "Default" organization in EDA
+#    - CAUSE: EDA operator 1.0.2 with older eda-server didn't auto-create organization
+#    - FIX: Use operator main branch which auto-creates "Default" organization
+#
+# 4. Database migration errors when upgrading eda-server
+#    - CAUSE: Incompatible migrations between old DB schema and new eda-server:main
+#    - FIX: Delete PVCs and redeploy fresh with new operator version
+#
+# DEPLOYMENT STEPS:
+# =================
+# 1. kubectl create namespace eda
+# 2. kubectl apply -k <operator-kustomization-dir>  # Use main branch
+# 3. kubectl apply -f <this-file>
+#
+---
+apiVersion: eda.ansible.com/v1alpha1
+kind: EDA
+metadata:
+  name: eda
+  namespace: eda
+spec:
+  # Connect to AWX for running job templates
+  automation_server_url: http://awx-demo-service.awx.svc.cluster.local:80
+
+  # Service configuration
+  service_type: NodePort
+  nodeport_port: 30081
+
+  # Note: When using operator from main branch, it automatically uses
+  # compatible main tag images for eda-server and eda-ui
+  # No need to specify image versions - operator handles this

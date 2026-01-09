@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: eda-demo-runner
+  namespace: eda
+spec:
+  restartPolicy: Never
+  containers:
+  - name: ansible-rulebook
+    image: quay.io/ansible/ansible-rulebook:v1.1.1
+    env:
+    - name: EDA_CONTROLLER_URL
+      value: "http://awx-demo-service.awx.svc.cluster.local"
+    - name: EDA_CONTROLLER_TOKEN
+      value: "y483m1DOi6loaDzkZU4L8w6YmAPyiN"
+    - name: EDA_CONTROLLER_SSL_VERIFY
+      value: "no"
+    command:
+    - ansible-rulebook
+    args:
+    - --rulebook
+    - /rulebooks/demo-rulebook.yaml
+    - --inventory
+    - /rulebooks/demo-inventory.yaml
+    - -vv
+    volumeMounts:
+    - name: rulebook-volume
+      mountPath: /rulebooks
+  volumes:
+  - name: rulebook-volume
+    configMap:
+      name: eda-demo-rulebook

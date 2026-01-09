@@ -1,0 +1,40 @@
+---
+# Pod to run the timed rulebook
+#
+# USAGE:
+#   1. Create ConfigMap: kubectl create configmap eda-timed-rulebook -n eda --from-file=timed-rulebook.yaml --from-file=demo-inventory.yaml
+#   2. Update AWX_TOKEN below
+#   3. kubectl apply -f timed-runner-pod.yaml
+#   4. kubectl logs -f eda-timed-runner -n eda
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: eda-timed-runner
+  namespace: eda
+spec:
+  restartPolicy: Never
+  containers:
+  - name: ansible-rulebook
+    image: quay.io/ansible/ansible-rulebook:v1.1.1
+    env:
+    - name: EDA_CONTROLLER_URL
+      value: "http://awx-demo-service.awx.svc.cluster.local"
+    - name: EDA_CONTROLLER_TOKEN
+      value: "YOUR_AWX_TOKEN_HERE"  # Replace with actual token
+    - name: EDA_CONTROLLER_SSL_VERIFY
+      value: "no"
+    command: ["ansible-rulebook"]
+    args:
+      - --rulebook
+      - /rulebooks/timed-rulebook.yaml
+      - --inventory
+      - /rulebooks/demo-inventory.yaml
+      - -vv
+    volumeMounts:
+    - name: rulebook-volume
+      mountPath: /rulebooks
+  volumes:
+  - name: rulebook-volume
+    configMap:
+      name: eda-timed-rulebook

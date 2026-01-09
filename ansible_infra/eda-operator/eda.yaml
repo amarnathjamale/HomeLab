@@ -1,0 +1,10 @@
+---
+apiVersion: eda.ansible.com/v1alpha1
+kind: EDA
+metadata:
+  name: eda
+  namespace: eda
+spec:
+  automation_server_url: http://awx-demo-service.awx.svc.cluster.local:80
+  service_type: NodePort
+  nodeport_port: 30081
