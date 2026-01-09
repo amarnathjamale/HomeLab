@@ -7,7 +7,7 @@
         delay: 30
   rules:
     - name: Trigger Ping Test on Tick
-      condition: event.tick is defined
+      condition: event.i is defined
       action:
         run_job_template:
           name: Ping Test
