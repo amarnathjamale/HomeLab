@@ -23,6 +23,6 @@ spec:
   image: quay.io/ansible/eda-server
   image_version: sha-559b1fb
 
-  # UI: latest (Jan 2026, working web interface)
+  # UI: 2.6.4 (stable version, Dec 2025)
   image_web: quay.io/ansible/eda-ui
-  image_web_version: latest
+  image_web_version: "2.6.4"
