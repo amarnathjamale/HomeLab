@@ -338,6 +338,81 @@ data:
                 verify_ssl: false
             status_code: [200, 201, 400]
           when: awx_token is defined
+          register: controller_cred
+
+        - name: Create HomeLab Rulebooks Project
+          ansible.builtin.uri:
+            url: "{{ eda_host }}/api/eda/v1/projects/"
+            method: POST
+            user: "{{ eda_username }}"
+            password: "{{ eda_password }}"
+            force_basic_auth: true
+            validate_certs: "{{ validate_certs }}"
+            body_format: json
+            body:
+              name: "HomeLab Rulebooks"
+              description: "Custom rulebooks from HomeLab repo"
+              url: "https://github.com/amarnathjamale/HomeLab"
+              organization_id: 1
+            status_code: [200, 201, 400]
+          register: homelab_project
+
+        - name: Wait for HomeLab project sync
+          ansible.builtin.uri:
+            url: "{{ eda_host }}/api/eda/v1/projects/{{ homelab_project.json.id | default(2) }}/"
+            method: GET
+            user: "{{ eda_username }}"
+            password: "{{ eda_password }}"
+            force_basic_auth: true
+            validate_certs: "{{ validate_certs }}"
+          register: project_status
+          until: project_status.json.import_state == 'completed'
+          retries: 30
+          delay: 5
+          when: homelab_project.status == 201
+
+        - name: Get tick rulebook ID
+          ansible.builtin.uri:
+            url: "{{ eda_host }}/api/eda/v1/rulebooks/?name=tick_ping_test.yml"
+            method: GET
+            user: "{{ eda_username }}"
+            password: "{{ eda_password }}"
+            force_basic_auth: true
+            validate_certs: "{{ validate_certs }}"
+          register: tick_rulebook
+
+        - name: Get AWX Controller credential ID
+          ansible.builtin.uri:
+            url: "{{ eda_host }}/api/eda/v1/eda-credentials/?name=AWX+Controller"
+            method: GET
+            user: "{{ eda_username }}"
+            password: "{{ eda_password }}"
+            force_basic_auth: true
+            validate_certs: "{{ validate_certs }}"
+          register: awx_cred
+
+        - name: Create Ping Test Rulebook Activation
+          ansible.builtin.uri:
+            url: "{{ eda_host }}/api/eda/v1/activations/"
+            method: POST
+            user: "{{ eda_username }}"
+            password: "{{ eda_password }}"
+            force_basic_auth: true
+            validate_certs: "{{ validate_certs }}"
+            body_format: json
+            body:
+              name: "Ping Test Every 30s"
+              description: "Triggers Ping Test job template every 30 seconds"
+              rulebook_id: "{{ tick_rulebook.json.results[0].id }}"
+              decision_environment_id: 1
+              organization_id: 1
+              eda_credentials: ["{{ awx_cred.json.results[0].id }}"]
+              is_enabled: true
+              restart_policy: "always"
+            status_code: [200, 201, 400]
+          when:
+            - tick_rulebook.json.count > 0
+            - awx_cred.json.count > 0
 
         - name: Display results
           ansible.builtin.debug:
@@ -345,7 +420,9 @@ data:
               EDA Provisioning Complete!
               - Decision Environment: Default Decision Environment
               - Project: Demo EDA Project
+              - HomeLab Rulebooks Project: Created
               - AWX Controller Credential: {{ 'Created' if awx_token is defined else 'Skipped (no token)' }}
+              - Rulebook Activation: Ping Test Every 30s
 ---
 apiVersion: v1
 kind: Pod
