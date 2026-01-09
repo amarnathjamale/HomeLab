@@ -10,7 +10,7 @@ spec:
     image: quay.io/ansible/ansible-rulebook:v1.1.1
     env:
     - name: EDA_CONTROLLER_URL
-      value: "http://awx-demo-service.awx.svc.cluster.local"
+      value: "http://awx-service.awx.svc.cluster.local"
     - name: EDA_CONTROLLER_TOKEN
       value: "y483m1DOi6loaDzkZU4L8w6YmAPyiN"
     - name: EDA_CONTROLLER_SSL_VERIFY

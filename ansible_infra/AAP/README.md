@@ -12,7 +12,7 @@ chmod +x deploy.sh cleanup.sh
 ./deploy.sh
 
 # Access UIs (run in separate terminals)
-kubectl port-forward svc/awx-demo-service -n awx 8080:80
+kubectl port-forward svc/awx-service -n awx 8080:80
 kubectl port-forward svc/eda-ui -n eda 8081:80
 ```
 
@@ -118,7 +118,7 @@ kubectl apply -f awx/awx-instance.yaml
 kubectl wait --for=condition=Ready pod -l app.kubernetes.io/name=awx-web -n awx --timeout=600s
 
 # Get password
-kubectl get secret awx-demo-admin-password -n awx -o jsonpath='{.data.password}' | base64 -d
+kubectl get secret awx-admin-password -n awx -o jsonpath='{.data.password}' | base64 -d
 ```
 
 ### 3. Deploy EDA

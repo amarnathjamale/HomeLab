@@ -11,8 +11,8 @@ set -e
 # Configuration
 AWX_NAMESPACE="${AWX_NAMESPACE:-awx}"
 EDA_NAMESPACE="${EDA_NAMESPACE:-eda}"
-AWX_SERVICE="awx-demo-service"
-AWX_SECRET="awx-demo-admin-password"
+AWX_SERVICE="awx-service"
+AWX_SECRET="awx-admin-password"
 EDA_SECRET="eda-admin-password"
 
 echo "=============================================="

@@ -1,0 +1,235 @@
+---
+# AWX Resource Provisioning Playbook
+# Uses awx.awx collection to create resources via API
+#
+# Usage:
+#   ansible-playbook provision-awx.yml -e "awx_host=http://localhost:8080 awx_username=admin awx_password=admin"
+#
+- name: Provision AWX Resources
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    awx_host: "{{ lookup('env', 'AWX_HOST') | default('http://awx-service.awx.svc.cluster.local:80', true) }}"
+    awx_username: "admin"
+    awx_password: "admin"
+    validate_certs: false
+
+  tasks:
+    - name: Wait for AWX API to be ready
+      ansible.builtin.uri:
+        url: "{{ awx_host }}/api/v2/ping/"
+        method: GET
+        validate_certs: "{{ validate_certs }}"
+        return_content: true
+      register: awx_ping
+      until: awx_ping.status == 200 and awx_ping.json is defined and awx_ping.json.version is defined
+      retries: 60
+      delay: 10
+
+    - name: Create Demo Organization
+      awx.awx.organization:
+        controller_host: "{{ awx_host }}"
+        controller_username: "{{ awx_username }}"
+        controller_password: "{{ awx_password }}"
+        validate_certs: "{{ validate_certs }}"
+        name: "Demo Organization"
+        description: "Example organization for demos"
+        state: present
+
+    - name: Create DevOps Team
+      awx.awx.team:
+        controller_host: "{{ awx_host }}"
+        controller_username: "{{ awx_username }}"
+        controller_password: "{{ awx_password }}"
+        validate_certs: "{{ validate_certs }}"
+        name: "DevOps Team"
+        description: "DevOps engineers team"
+        organization: "Demo Organization"
+        state: present
+
+    - name: Create Demo User
+      awx.awx.user:
+        controller_host: "{{ awx_host }}"
+        controller_username: "{{ awx_username }}"
+        controller_password: "{{ awx_password }}"
+        validate_certs: "{{ validate_certs }}"
+        username: "demouser"
+        password: "demopass123"
+        email: "demo@example.com"
+        first_name: "Demo"
+        last_name: "User"
+        state: present
+
+    - name: Create Machine Credential
+      awx.awx.credential:
+        controller_host: "{{ awx_host }}"
+        controller_username: "{{ awx_username }}"
+        controller_password: "{{ awx_password }}"
+        validate_certs: "{{ validate_certs }}"
+        name: "Demo Machine Credential"
+        description: "SSH credential for demo hosts"
+        organization: "Demo Organization"
+        credential_type: "Machine"
+        inputs:
+          username: ansible
+          password: ansible123
+        state: present
+
+    - name: Create Demo Project
+      awx.awx.project:
+        controller_host: "{{ awx_host }}"
+        controller_username: "{{ awx_username }}"
+        controller_password: "{{ awx_password }}"
+        validate_certs: "{{ validate_certs }}"
+        name: "Demo Ansible Project"
+        description: "Sample playbooks for demos"
+        organization: "Demo Organization"
+        scm_type: git
+        scm_url: "https://github.com/ansible/ansible-tower-samples"
+        scm_branch: master
+        state: present
+      register: project_result
+
+    - name: Wait for project sync
+      ansible.builtin.pause:
+        seconds: 30
+      when: project_result.changed
+
+    - name: Create Demo Org Inventory
+      awx.awx.inventory:
+        controller_host: "{{ awx_host }}"
+        controller_username: "{{ awx_username }}"
+        controller_password: "{{ awx_password }}"
+        validate_certs: "{{ validate_certs }}"
+        name: "Demo Org Inventory"
+        description: "Demo hosts inventory"
+        organization: "Demo Organization"
+        state: present
+
+    - name: Create Inventory Group
+      awx.awx.group:
+        controller_host: "{{ awx_host }}"
+        controller_username: "{{ awx_username }}"
+        controller_password: "{{ awx_password }}"
+        validate_certs: "{{ validate_certs }}"
+        name: "webservers"
+        description: "Web server hosts"
+        inventory: "Demo Org Inventory"
+        state: present
+
+    - name: Create localhost Host
+      awx.awx.host:
+        controller_host: "{{ awx_host }}"
+        controller_username: "{{ awx_username }}"
+        controller_password: "{{ awx_password }}"
+        validate_certs: "{{ validate_certs }}"
+        name: "localhost"
+        description: "Local execution host"
+        inventory: "Demo Org Inventory"
+        variables:
+          ansible_connection: local
+        state: present
+
+    - name: Create Demo Job Template
+      awx.awx.job_template:
+        controller_host: "{{ awx_host }}"
+        controller_username: "{{ awx_username }}"
+        controller_password: "{{ awx_password }}"
+        validate_certs: "{{ validate_certs }}"
+        name: "Demo Job Template"
+        description: "Simple hello world playbook"
+        organization: "Demo Organization"
+        project: "Demo Ansible Project"
+        playbook: "hello_world.yml"
+        inventory: "Demo Org Inventory"
+        job_type: run
+        state: present
+
+    - name: Create Ping Test Job Template
+      awx.awx.job_template:
+        controller_host: "{{ awx_host }}"
+        controller_username: "{{ awx_username }}"
+        controller_password: "{{ awx_password }}"
+        validate_certs: "{{ validate_certs }}"
+        name: "Ping Test"
+        description: "Simple ping test"
+        organization: "Demo Organization"
+        project: "Demo Ansible Project"
+        playbook: "hello_world.yml"
+        inventory: "Demo Org Inventory"
+        job_type: run
+        state: present
+
+    - name: Create Demo Workflow
+      awx.awx.workflow_job_template:
+        controller_host: "{{ awx_host }}"
+        controller_username: "{{ awx_username }}"
+        controller_password: "{{ awx_password }}"
+        validate_certs: "{{ validate_certs }}"
+        name: "Demo Workflow"
+        description: "Example workflow"
+        organization: "Demo Organization"
+        state: present
+
+    - name: Create Execution Environment
+      awx.awx.execution_environment:
+        controller_host: "{{ awx_host }}"
+        controller_username: "{{ awx_username }}"
+        controller_password: "{{ awx_password }}"
+        validate_certs: "{{ validate_certs }}"
+        name: "Demo Execution Environment"
+        description: "Custom EE for demos"
+        image: "quay.io/ansible/awx-ee:latest"
+        state: present
+
+    - name: Create EDA OAuth Application
+      awx.awx.application:
+        controller_host: "{{ awx_host }}"
+        controller_username: "{{ awx_username }}"
+        controller_password: "{{ awx_password }}"
+        validate_certs: "{{ validate_certs }}"
+        name: "EDA Application"
+        description: "OAuth app for EDA integration"
+        organization: "Demo Organization"
+        authorization_grant_type: password
+        client_type: confidential
+        state: present
+
+    - name: Create EDA Integration Token
+      awx.awx.token:
+        controller_host: "{{ awx_host }}"
+        controller_username: "{{ awx_username }}"
+        controller_password: "{{ awx_password }}"
+        validate_certs: "{{ validate_certs }}"
+        description: "EDA Integration Token"
+        scope: write
+        state: present
+      register: eda_token
+
+    - name: Display EDA Token
+      ansible.builtin.debug:
+        msg: "EDA Token: {{ eda_token.ansible_facts.controller_token.token }}"
+      when: eda_token.changed
+
+    - name: Save EDA Token to file
+      ansible.builtin.copy:
+        content: "{{ eda_token.ansible_facts.controller_token.token }}"
+        dest: /tmp/awx-eda-token.txt
+        mode: '0600'
+      when: eda_token.changed
+
+    - name: AWX Provisioning Complete
+      ansible.builtin.debug:
+        msg: |
+          AWX Resources Created:
+          - Organization: Demo Organization
+          - Team: DevOps Team
+          - User: demouser
+          - Credential: Demo Machine Credential
+          - Project: Demo Ansible Project
+          - Inventory: Demo Org Inventory
+          - Job Templates: Demo Job Template, Ping Test
+          - Workflow: Demo Workflow
+          - EDA Token: Saved to /tmp/awx-eda-token.txt

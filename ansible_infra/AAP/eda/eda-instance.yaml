@@ -8,7 +8,11 @@ metadata:
   namespace: eda
 spec:
   # AWX Controller connection
-  automation_server_url: http://awx-demo-service.awx.svc.cluster.local:80
+  automation_server_url: http://awx-service.awx.svc.cluster.local:80
+
+  # Admin user configuration
+  admin_user: admin
+  admin_password_secret: eda-admin-password
 
   # Service configuration
   service_type: NodePort
@@ -19,9 +23,3 @@ spec:
   image_version: main
   image_web: quay.io/ansible/eda-ui
   image_web_version: main
-
-  # PostgreSQL configuration
-  postgres_storage_class: standard
-  postgres_storage_requirements:
-    requests:
-      storage: 8Gi

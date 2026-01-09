@@ -17,7 +17,7 @@ kubectl apply -k eda-operator/
 kubectl apply -f eda-operator/eda.yaml
 
 # Access services (run in separate terminals)
-kubectl port-forward svc/awx-demo-service -n awx 8080:80
+kubectl port-forward svc/awx-service -n awx 8080:80
 kubectl port-forward svc/eda-ui -n eda 8081:80
 ```
 
@@ -56,7 +56,7 @@ kubectl apply -f eda-operator/eda.yaml
 
 ### AWX
 - **Username:** admin
-- **Password:** Run `kubectl get secret awx-demo-admin-password -n awx -o jsonpath='{.data.password}' | base64 -d`
+- **Password:** Run `kubectl get secret awx-admin-password -n awx -o jsonpath='{.data.password}' | base64 -d`
 
 ### EDA
 - **Username:** admin

@@ -23,7 +23,7 @@ spec:
       name: webhook
     env:
     - name: EDA_CONTROLLER_URL
-      value: "http://awx-demo-service.awx.svc.cluster.local"
+      value: "http://awx-service.awx.svc.cluster.local"
     - name: EDA_CONTROLLER_TOKEN
       value: "qOyZyOHWDut5zHo7wNzdVfmBYHKBVW"
     - name: EDA_CONTROLLER_SSL_VERIFY

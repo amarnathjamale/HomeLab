@@ -75,7 +75,7 @@ metadata:
   name: eda
   namespace: eda
 spec:
-  automation_server_url: http://awx-demo-service.awx.svc.cluster.local:80
+  automation_server_url: http://awx-service.awx.svc.cluster.local:80
   service_type: NodePort
   nodeport_port: 30081
 
@@ -125,13 +125,13 @@ kubectl wait --for=condition=Ready pod -l app.kubernetes.io/component=eda-api -n
 kubectl get secret eda-admin-password -n eda -o jsonpath='{.data.password}' | base64 -d
 
 # AWX password
-kubectl get secret awx-demo-admin-password -n awx -o jsonpath='{.data.password}' | base64 -d
+kubectl get secret awx-admin-password -n awx -o jsonpath='{.data.password}' | base64 -d
 ```
 
 ### Step 4: Access UIs
 ```bash
 # Terminal 1
-kubectl port-forward svc/awx-demo-service -n awx 8080:80
+kubectl port-forward svc/awx-service -n awx 8080:80
 
 # Terminal 2
 kubectl port-forward svc/eda-ui -n eda 8081:80
@@ -146,7 +146,7 @@ Since activations may be stuck, run ansible-rulebook manually:
 ### Create AWX Token First
 ```bash
 AWX_URL="http://127.0.0.1:XXXXX"  # Your AWX URL
-AWX_PASS=$(kubectl get secret awx-demo-admin-password -n awx -o jsonpath='{.data.password}' | base64 -d)
+AWX_PASS=$(kubectl get secret awx-admin-password -n awx -o jsonpath='{.data.password}' | base64 -d)
 
 # Create token
 curl -s -X POST "$AWX_URL/api/v2/tokens/" \

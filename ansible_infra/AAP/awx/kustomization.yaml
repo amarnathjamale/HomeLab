@@ -5,8 +5,8 @@ kind: Kustomization
 namespace: awx
 
 resources:
-  - namespace.yaml
   - github.com/ansible/awx-operator/config/default?ref=2.19.1
+  - admin-password-secret.yaml
 
 images:
   - name: quay.io/ansible/awx-operator

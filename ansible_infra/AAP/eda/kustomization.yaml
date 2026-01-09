@@ -5,8 +5,8 @@ kind: Kustomization
 namespace: eda
 
 resources:
-  - namespace.yaml
   - github.com/ansible/eda-server-operator/config/default?ref=main
+  - admin-password-secret.yaml
 
 images:
   - name: quay.io/ansible/eda-server-operator

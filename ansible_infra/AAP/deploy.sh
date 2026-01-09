@@ -41,6 +41,10 @@ echo ""
 if [ "$SKIP_AWX" = false ]; then
   echo ">>> Step 1: Deploying AWX..."
 
+  # Create namespace
+  echo "  Creating AWX namespace..."
+  kubectl create namespace awx 2>/dev/null || true
+
   # Deploy AWX operator
   echo "  Installing AWX Operator..."
   kubectl apply -k "$SCRIPT_DIR/awx/"
@@ -59,7 +63,7 @@ if [ "$SKIP_AWX" = false ]; then
   kubectl wait --for=condition=Ready pod -l app.kubernetes.io/name=awx-task -n awx --timeout=600s || true
 
   # Get AWX password
-  AWX_PASS=$(kubectl get secret awx-demo-admin-password -n awx -o jsonpath='{.data.password}' | base64 -d)
+  AWX_PASS=$(kubectl get secret awx-admin-password -n awx -o jsonpath='{.data.password}' | base64 -d)
   echo ""
   echo "  AWX Deployed!"
   echo "  Initial Password: $AWX_PASS"
@@ -71,6 +75,10 @@ fi
 #######################################
 if [ "$SKIP_EDA" = false ]; then
   echo ">>> Step 2: Deploying EDA..."
+
+  # Create namespace
+  echo "  Creating EDA namespace..."
+  kubectl create namespace eda 2>/dev/null || true
 
   # Deploy EDA operator
   echo "  Installing EDA Operator..."
@@ -97,34 +105,36 @@ if [ "$SKIP_EDA" = false ]; then
 fi
 
 #######################################
-# Step 3: Provision Resources
+# Step 3: Provision Resources (Config as Code)
 #######################################
 if [ "$SKIP_RESOURCES" = false ]; then
-  echo ">>> Step 3: Provisioning Resources..."
+  echo ">>> Step 3: Provisioning Resources using Ansible Runner Pod..."
 
-  # Apply resource ConfigMaps
-  kubectl apply -f "$SCRIPT_DIR/resources/awx-resources.yaml" || true
-  kubectl apply -f "$SCRIPT_DIR/resources/eda-resources.yaml" || true
+  # Clean up any existing runner resources
+  echo "  Cleaning up existing provisioning resources..."
+  kubectl delete pod ansible-runner --ignore-not-found 2>/dev/null || true
+  kubectl delete configmap ansible-playbooks --ignore-not-found 2>/dev/null || true
 
-  # Run AWX provisioning job
-  echo "  Running AWX Provisioning Job..."
-  kubectl delete job awx-provision -n awx 2>/dev/null || true
-  kubectl apply -f "$SCRIPT_DIR/resources/provisioning-job.yaml"
+  # Deploy ansible-runner pod (runs playbooks from inside the cluster)
+  echo "  Deploying Ansible Runner Pod..."
+  kubectl apply -f "$SCRIPT_DIR/playbooks/ansible-runner-pod.yaml"
 
-  # Wait for AWX provisioning
-  echo "  Waiting for AWX provisioning to complete..."
-  kubectl wait --for=condition=Complete job/awx-provision -n awx --timeout=300s || true
-  kubectl logs job/awx-provision -n awx
+  # Wait for pod to complete
+  echo "  Waiting for provisioning to complete (this may take 2-3 minutes)..."
+  kubectl wait --for=condition=Ready pod/ansible-runner --timeout=60s 2>/dev/null || true
 
-  # Run EDA provisioning job
-  echo "  Running EDA Provisioning Job..."
-  kubectl delete job eda-provision -n eda 2>/dev/null || true
-  kubectl apply -f "$SCRIPT_DIR/resources/eda-provisioning-job.yaml"
+  # Follow logs until completion
+  echo "  Provisioning in progress..."
+  kubectl logs -f ansible-runner 2>/dev/null || true
 
-  # Wait for EDA provisioning
-  echo "  Waiting for EDA provisioning to complete..."
-  kubectl wait --for=condition=Complete job/eda-provision -n eda --timeout=300s || true
-  kubectl logs job/eda-provision -n eda
+  # Check final status
+  POD_STATUS=$(kubectl get pod ansible-runner -o jsonpath='{.status.phase}' 2>/dev/null || echo "Unknown")
+  if [ "$POD_STATUS" = "Succeeded" ]; then
+    echo "  Provisioning completed successfully!"
+  else
+    echo "  Provisioning status: $POD_STATUS"
+    echo "  Check logs with: kubectl logs ansible-runner"
+  fi
 
   echo ""
 fi
@@ -138,13 +148,10 @@ echo "=============================================="
 echo ""
 echo "Access the UIs (run in separate terminals):"
 echo ""
-echo "  AWX:  kubectl port-forward svc/awx-demo-service -n awx 8080:80"
+echo "  AWX:  kubectl port-forward svc/awx-service -n awx 8080:80"
 echo "  EDA:  kubectl port-forward svc/eda-ui -n eda 8081:80"
 echo ""
 echo "Credentials:"
 echo "  AWX:  admin / admin"
-echo "  EDA:  admin / <run: kubectl get secret eda-admin-password -n eda -o jsonpath='{.data.password}' | base64 -d>"
-echo ""
-echo "To change EDA password to 'admin', run:"
-echo "  kubectl exec deployment/eda-api -n eda -- aap-eda-manage update_password --username=admin --password=admin"
+echo "  EDA:  admin / admin"
 echo ""

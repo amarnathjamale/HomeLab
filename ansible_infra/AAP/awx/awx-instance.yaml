@@ -36,4 +36,4 @@ spec:
 
   # Admin user configuration
   admin_user: admin
-  # admin_password_secret: awx-admin-password  # Optional: use existing secret
+  admin_password_secret: awx-admin-password

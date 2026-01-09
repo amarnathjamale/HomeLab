@@ -35,7 +35,7 @@ metadata:
   namespace: eda
 spec:
   # Connect to AWX for running job templates
-  automation_server_url: http://awx-demo-service.awx.svc.cluster.local:80
+  automation_server_url: http://awx-service.awx.svc.cluster.local:80
 
   # Service configuration
   service_type: NodePort

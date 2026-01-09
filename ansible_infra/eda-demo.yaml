@@ -16,7 +16,7 @@ metadata:
   namespace: eda-server-operator-system
 spec:
   # AWX connection
-  automation_server_url: http://awx-demo-service.awx.svc.cluster.local:80
+  automation_server_url: http://awx-service.awx.svc.cluster.local:80
 
   # Service exposure
   service_type: NodePort

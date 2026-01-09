@@ -1,0 +1,14 @@
+---
+# Tick Rulebook - Triggers Ping Test every 30 seconds
+- name: Periodic Ping Test Trigger
+  hosts: all
+  sources:
+    - ansible.eda.tick:
+        delay: 30
+  rules:
+    - name: Trigger Ping Test on Tick
+      condition: event.tick is defined
+      action:
+        run_job_template:
+          name: Ping Test
+          organization: Demo Organization

@@ -147,7 +147,7 @@
 ## Access Information
 
 ### AWX
-- **URL**: `kubectl port-forward svc/awx-demo-service -n awx 8080:80`
+- **URL**: `kubectl port-forward svc/awx-service -n awx 8080:80`
 - **Username**: admin
 - **Password**: admin
 

@@ -68,7 +68,7 @@ kubectl wait --for=condition=Ready pod -l app.kubernetes.io/name=awx-web -n awx 
 kubectl wait --for=condition=Ready pod -l app.kubernetes.io/name=awx-task -n awx --timeout=300s
 
 # Get AWX admin password
-echo "AWX Password: $(kubectl get secret awx-demo-admin-password -n awx -o jsonpath='{.data.password}' | base64 -d)"
+echo "AWX Password: $(kubectl get secret awx-admin-password -n awx -o jsonpath='{.data.password}' | base64 -d)"
 ```
 
 ---
@@ -110,7 +110,7 @@ metadata:
   name: eda
   namespace: eda
 spec:
-  automation_server_url: http://awx-demo-service.awx.svc.cluster.local:80
+  automation_server_url: http://awx-service.awx.svc.cluster.local:80
   service_type: NodePort
   nodeport_port: 30081
 EOF
@@ -133,7 +133,7 @@ Run these in **separate terminals** (they need to stay open):
 
 ```bash
 # Terminal 1 - AWX
-kubectl port-forward svc/awx-demo-service -n awx 8080:80
+kubectl port-forward svc/awx-service -n awx 8080:80
 
 # Terminal 2 - EDA
 kubectl port-forward svc/eda-ui -n eda 8081:80
@@ -148,7 +148,7 @@ Note the URLs that are printed (e.g., http://127.0.0.1:XXXXX)
 ```bash
 # Set your AWX URL (from step 4)
 AWX_URL="http://127.0.0.1:XXXXX"  # Replace with actual URL
-AWX_PASS=$(kubectl get secret awx-demo-admin-password -n awx -o jsonpath='{.data.password}' | base64 -d)
+AWX_PASS=$(kubectl get secret awx-admin-password -n awx -o jsonpath='{.data.password}' | base64 -d)
 
 # Create Project
 curl -s -X POST "$AWX_URL/api/v2/projects/" \
@@ -242,7 +242,7 @@ spec:
     image: quay.io/ansible/ansible-rulebook:v1.1.1
     env:
     - name: EDA_CONTROLLER_URL
-      value: "http://awx-demo-service.awx.svc.cluster.local"
+      value: "http://awx-service.awx.svc.cluster.local"
     - name: EDA_CONTROLLER_TOKEN
       value: "$AWX_TOKEN"
     - name: EDA_CONTROLLER_SSL_VERIFY

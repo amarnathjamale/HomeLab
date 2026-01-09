@@ -1,0 +1,178 @@
+---
+# EDA Resource Provisioning Playbook
+# Uses URI module to create resources via EDA API
+#
+# Usage:
+#   ansible-playbook provision-eda.yml -e "eda_host=http://localhost:8081 eda_username=admin eda_password=admin"
+#
+- name: Provision EDA Resources
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    eda_host: "{{ lookup('env', 'EDA_HOST') | default('http://eda-api.eda.svc.cluster.local:8000', true) }}"
+    eda_username: "admin"
+    eda_password: "admin"
+    awx_host: "http://awx-service.awx.svc.cluster.local:80"
+    awx_token_file: "/tmp/awx-eda-token.txt"
+    validate_certs: false
+
+  tasks:
+    - name: Wait for EDA API to be ready
+      ansible.builtin.uri:
+        url: "{{ eda_host }}/api/eda/v1/users/me/"
+        method: GET
+        user: "{{ eda_username }}"
+        password: "{{ eda_password }}"
+        force_basic_auth: true
+        validate_certs: "{{ validate_certs }}"
+      register: eda_ping
+      until: eda_ping.status == 200
+      retries: 30
+      delay: 10
+
+    - name: Create Decision Environment
+      ansible.builtin.uri:
+        url: "{{ eda_host }}/api/eda/v1/decision-environments/"
+        method: POST
+        user: "{{ eda_username }}"
+        password: "{{ eda_password }}"
+        force_basic_auth: true
+        validate_certs: "{{ validate_certs }}"
+        body_format: json
+        body:
+          name: "Default Decision Environment"
+          description: "Default DE for running rulebooks"
+          image_url: "quay.io/ansible/ansible-rulebook:v1.1.1"
+          organization_id: 1
+        status_code: [200, 201, 400]
+      register: de_result
+
+    - name: Create EDA Project
+      ansible.builtin.uri:
+        url: "{{ eda_host }}/api/eda/v1/projects/"
+        method: POST
+        user: "{{ eda_username }}"
+        password: "{{ eda_password }}"
+        force_basic_auth: true
+        validate_certs: "{{ validate_certs }}"
+        body_format: json
+        body:
+          name: "Demo EDA Project"
+          description: "Sample rulebooks for demos"
+          url: "https://github.com/ansible/event-driven-ansible"
+          organization_id: 1
+        status_code: [200, 201, 400]
+      register: project_result
+
+    - name: Wait for project sync
+      ansible.builtin.pause:
+        seconds: 30
+      when: project_result.status == 201
+
+    - name: Get Credential Types
+      ansible.builtin.uri:
+        url: "{{ eda_host }}/api/eda/v1/credential-types/?page_size=100"
+        method: GET
+        user: "{{ eda_username }}"
+        password: "{{ eda_password }}"
+        force_basic_auth: true
+        validate_certs: "{{ validate_certs }}"
+      register: cred_types
+
+    - name: Find Controller credential type ID
+      ansible.builtin.set_fact:
+        controller_cred_type_id: "{{ item.id }}"
+      loop: "{{ cred_types.json.results }}"
+      when: "'Controller' in item.name or 'AAP' in item.name or 'Red Hat Ansible Automation Platform' in item.name"
+      no_log: true
+
+    - name: Check for AWX token file
+      ansible.builtin.stat:
+        path: "{{ awx_token_file }}"
+      register: token_file
+
+    - name: Read AWX token
+      ansible.builtin.slurp:
+        src: "{{ awx_token_file }}"
+      register: awx_token_content
+      when: token_file.stat.exists
+
+    - name: Set AWX token fact
+      ansible.builtin.set_fact:
+        awx_token: "{{ awx_token_content.content | b64decode | trim }}"
+      when: token_file.stat.exists
+
+    - name: Create AWX Controller Credential
+      ansible.builtin.uri:
+        url: "{{ eda_host }}/api/eda/v1/eda-credentials/"
+        method: POST
+        user: "{{ eda_username }}"
+        password: "{{ eda_password }}"
+        force_basic_auth: true
+        validate_certs: "{{ validate_certs }}"
+        body_format: json
+        body:
+          name: "AWX Controller"
+          description: "AWX Controller for triggering jobs"
+          organization_id: 1
+          credential_type_id: "{{ controller_cred_type_id | default(1) }}"
+          inputs:
+            host: "{{ awx_host }}/"
+            oauth_token: "{{ awx_token | default('') }}"
+            verify_ssl: false
+        status_code: [200, 201, 400]
+      when:
+        - controller_cred_type_id is defined
+        - awx_token is defined
+      register: controller_cred
+
+    - name: Get Decision Environments
+      ansible.builtin.uri:
+        url: "{{ eda_host }}/api/eda/v1/decision-environments/"
+        method: GET
+        user: "{{ eda_username }}"
+        password: "{{ eda_password }}"
+        force_basic_auth: true
+        validate_certs: "{{ validate_certs }}"
+      register: des
+
+    - name: Get Projects
+      ansible.builtin.uri:
+        url: "{{ eda_host }}/api/eda/v1/projects/"
+        method: GET
+        user: "{{ eda_username }}"
+        password: "{{ eda_password }}"
+        force_basic_auth: true
+        validate_certs: "{{ validate_certs }}"
+      register: projects
+
+    - name: Get Rulebooks
+      ansible.builtin.uri:
+        url: "{{ eda_host }}/api/eda/v1/rulebooks/"
+        method: GET
+        user: "{{ eda_username }}"
+        password: "{{ eda_password }}"
+        force_basic_auth: true
+        validate_certs: "{{ validate_certs }}"
+      register: rulebooks
+
+    - name: Display available rulebooks
+      ansible.builtin.debug:
+        msg: "Available rulebooks: {{ rulebooks.json.results | map(attribute='name') | list }}"
+      when: rulebooks.json.results | length > 0
+
+    - name: EDA Provisioning Complete
+      ansible.builtin.debug:
+        msg: |
+          EDA Resources Created:
+          - Decision Environment: Default Decision Environment
+          - Project: Demo EDA Project
+          - AWX Controller Credential: {{ 'Created' if controller_cred is defined and controller_cred.status == 201 else 'Skipped (no token)' }}
+
+          Next Steps:
+          1. Create a Rulebook Activation in EDA UI
+          2. Select the Demo EDA Project and a rulebook
+          3. Select the Default Decision Environment
+          4. Select AWX Controller credential for job triggers
