@@ -1,0 +1,43 @@
+---
+# Test Pre-encoded Authentication (Recommended for troubleshooting)
+# This method uses the exact header that works with curl
+- name: Zendesk Tickets - Pre-encoded Auth
+  hosts: all
+
+  sources:
+    - name: zendesk_tickets
+      custom.zendesk_eda.zendesk_api_pull:
+        zendesk_host: "{{ zendesk_host }}"
+        zendesk_encrypted_token_header: "{{ zendesk_encrypted_token_header }}"
+        endpoint: "/api/v2/tickets.json"
+        query_params:
+          per_page: 50
+          status: "new,open"
+        delay: 60
+
+  rules:
+    - name: Log successful ticket retrieval
+      condition: event.zendesk is defined and event.zendesk.error is not defined
+      action:
+        debug:
+          msg: |
+            ✅ SUCCESS: Retrieved {{ event.zendesk.items.count }} tickets
+            Endpoint: {{ event.zendesk.endpoint }}
+            Timestamp: {{ event.zendesk.timestamp }}
+
+    - name: Handle authentication errors
+      condition: event.zendesk.error is defined and event.zendesk.status_code == 401
+      action:
+        debug:
+          msg: |
+            ❌ AUTHENTICATION ERROR (401)
+            If curl works with this header, check AAP credential injection.
+            Message: {{ event.zendesk.message }}
+
+    - name: Handle other errors
+      condition: event.zendesk.error is defined and event.zendesk.status_code != 401
+      action:
+        debug:
+          msg: |
+            ⚠️ ERROR {{ event.zendesk.status_code }}
+            Message: {{ event.zendesk.message }}
