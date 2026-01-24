@@ -1,0 +1,154 @@
+---
+# =============================================================================
+# DEBUG RULEBOOK - Shows Variables Being Passed to Plugin
+# =============================================================================
+# This rulebook helps debug variable passing from AAP to the plugin
+#
+# Use this to verify:
+# - Variables are defined
+# - Values don't have extra spaces
+# - Variable names match AAP credential fields
+#
+
+- name: Debug Zendesk Variables
+  hosts: localhost
+  
+  # Print variables before using them
+  tasks:
+    - name: Debug all Zendesk variables
+      ansible.builtin.debug:
+        msg:
+          - "=== ZENDESK VARIABLES DEBUG ==="
+          - "zendesk_email: '{{ zendesk_email | default('UNDEFINED') }}'"
+          - "zendesk_email length: {{ zendesk_email | default('') | length }}"
+          - "zendesk_api_token defined: {{ zendesk_api_token is defined }}"
+          - "zendesk_api_token length: {{ zendesk_api_token | default('') | length }}"
+          - "zendesk_api_token first 5 chars: '{{ zendesk_api_token | default('') | string | slice(0,5) | first }}'"
+          - "zendesk_api_token last 5 chars: '{{ zendesk_api_token | default('') | string | slice(-5) | first }}'"
+          - "zendesk_password defined: {{ zendesk_password is defined }}"
+          - "zendesk_host: '{{ zendesk_host | default('UNDEFINED') }}'"
+          - "zendesk_host length: {{ zendesk_host | default('') | length }}"
+          - "==================================="
+
+  sources:
+    - name: zendesk_debug
+      custom.zendesk_eda.zendesk_api_pull:
+        # Using variables from AAP
+        zendesk_email: "{{ zendesk_email }}"
+        zendesk_api_token: "{{ zendesk_api_token }}"
+        zendesk_host: "{{ zendesk_host }}"
+        endpoint: "/api/v2/tickets.json"
+        query_params:
+          per_page: 1
+        delay: 10
+
+  rules:
+    - name: Print successful events
+      condition: >
+        event.zendesk is defined and
+        event.zendesk.error is not defined
+      action:
+        debug:
+          msg:
+            - "✅ SUCCESS! Authentication worked!"
+            - "Host: {{ event.zendesk.host }}"
+            - "Endpoint: {{ event.zendesk.endpoint }}"
+            - "Items count: {{ event.zendesk.items.count }}"
+            - "Timestamp: {{ event.zendesk.timestamp }}"
+
+    - name: Print error events with details
+      condition: >
+        event.zendesk is defined and
+        event.zendesk.error is defined
+      action:
+        debug:
+          msg:
+            - "❌ ERROR! Authentication failed"
+            - "Status code: {{ event.zendesk.status_code }}"
+            - "Message: {{ event.zendesk.message }}"
+            - "Endpoint: {{ event.zendesk.endpoint }}"
+            - "Auth format used: {{ event.zendesk.auth_format | default('N/A') }}"
+            - "---"
+            - "This means the variables passed to plugin are wrong!"
+            - "Check AAP credential mapping"
+
+    - name: Print all events for debugging
+      condition: event is defined
+      action:
+        debug:
+          msg: "Full event: {{ event }}"
+
+
+---
+# =============================================================================
+# HARDCODED TEST - Use This If Variables Don't Work
+# =============================================================================
+# Replace with YOUR actual credentials to test if plugin works at all
+#
+
+- name: Hardcoded Credentials Test
+  hosts: localhost
+  
+  sources:
+    - name: zendesk_hardcoded
+      custom.zendesk_eda.zendesk_api_pull:
+        # ⚠️ REPLACE THESE WITH YOUR ACTUAL VALUES
+        zendesk_email: "YOUR_EMAIL@company.io"
+        zendesk_api_token: "YOUR_API_TOKEN_HERE"
+        zendesk_host: "YOUR_SUBDOMAIN.zendesk.com"
+        endpoint: "/api/v2/tickets.json"
+        query_params:
+          per_page: 1
+        delay: 10
+
+  rules:
+    - name: Print result
+      condition: event.zendesk is defined
+      action:
+        debug:
+          msg:
+            - "Event: {{ event.zendesk }}"
+            - "Error: {{ event.zendesk.error | default(false) }}"
+
+
+---
+# =============================================================================
+# VARIABLE COMPARISON TEST
+# =============================================================================
+# This shows both variable and hardcoded side by side
+#
+
+- name: Compare Variables vs Hardcoded
+  hosts: localhost
+  
+  tasks:
+    - name: Show what AAP is providing
+      ansible.builtin.debug:
+        msg:
+          - "From AAP variables:"
+          - "  email: '{{ zendesk_email | default('NOT_DEFINED') }}'"
+          - "  token length: {{ zendesk_api_token | default('') | length }}"
+          - "  host: '{{ zendesk_host | default('NOT_DEFINED') }}'"
+          - ""
+          - "Expected values (replace with yours):"
+          - "  email: 'YOUR_EMAIL@company.io'"
+          - "  token length: 40+ characters"
+          - "  host: 'YOUR_SUBDOMAIN.zendesk.com'"
+          - ""
+          - "Do they match? If not, check AAP credential field names!"
+
+  sources:
+    - name: zendesk_vars
+      custom.zendesk_eda.zendesk_api_pull:
+        zendesk_email: "{{ zendesk_email }}"
+        zendesk_api_token: "{{ zendesk_api_token }}"
+        zendesk_host: "{{ zendesk_host }}"
+        endpoint: "/api/v2/tickets.json"
+        delay: 30
+
+  rules:
+    - name: Show variables result
+      condition: event is defined
+      action:
+        debug:
+          msg: "Variables test: {{ event }}"

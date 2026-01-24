@@ -1,0 +1,116 @@
+---
+- name: RMA ticket status transitions
+  hosts: all
+
+  vars:
+    zendesk_host: "{{ zendesk_host | default('company.zendesk.com') }}"
+    zendesk_auth_header: "{{ zendesk_auth_header }}"
+    rma_form_id: 123456789
+    ticket_event_start_time: 1704067200
+    rma_in_progress_status: "open"
+
+  sources:
+    - name: zendesk_rma_ticket_events
+      custom.zendesk_eda.zendesk_api_pull:
+        zendesk_host: "{{ zendesk_host }}"
+        zendesk_encrypted_token_header: "{{ zendesk_auth_header }}"
+        endpoint: "/api/v2/incremental/ticket_events.json"
+        query_params:
+          start_time: "{{ ticket_event_start_time }}"
+        delay: 30
+
+  rules:
+    - name: RMA form moved from new to in progress
+      condition: >
+        event.zendesk.endpoint == "/api/v2/incremental/ticket_events.json" and
+        event.zendesk.error is not defined and
+        event.zendesk.data.ticket_events is defined and
+        (
+          event.zendesk.data.ticket_events
+          | json_query('[?child_events[?field_name==`status` && previous_value==`new` && value==`' ~ rma_in_progress_status ~ '`] && child_events[?field_name==`ticket_form_id` && value==`' ~ rma_form_id ~ '`]].ticket_id')
+          | length > 0
+        )
+      action:
+        run_playbook:
+          name: rma_status_to_in_progress.yml
+          extra_vars:
+            ticket_ids: "{{ event.zendesk.data.ticket_events | json_query('[?child_events[?field_name==`status` && previous_value==`new` && value==`' ~ rma_in_progress_status ~ '`] && child_events[?field_name==`ticket_form_id` && value==`' ~ rma_form_id ~ '`]].ticket_id') }}"
+            rma_form_id: "{{ rma_form_id }}"
+            new_status: "{{ rma_in_progress_status }}"
+
+---
+- name: RMA open tickets missing hardware id
+  hosts: all
+
+  vars:
+    zendesk_host: "{{ zendesk_host | default('company.zendesk.com') }}"
+    zendesk_auth_header: "{{ zendesk_auth_header }}"
+    rma_form_id: 123456789
+    hardware_id_field_id: 222222222
+
+  sources:
+    - name: zendesk_rma_search
+      custom.zendesk_eda.zendesk_api_pull:
+        zendesk_host: "{{ zendesk_host }}"
+        zendesk_encrypted_token_header: "{{ zendesk_auth_header }}"
+        endpoint: "/api/v2/search.json"
+        query_params:
+          query: "type:ticket status:open ticket_form_id:{{ rma_form_id }} tags:rma"
+          sort_by: "updated_at"
+          sort_order: "desc"
+        delay: 60
+
+  rules:
+    - name: Request hardware id on RMA tickets
+      condition: >
+        event.zendesk.endpoint == "/api/v2/search.json" and
+        event.zendesk.error is not defined and
+        event.zendesk.data.results is defined and
+        (
+          event.zendesk.data.results
+          | json_query('[?custom_fields[?id==`' ~ hardware_id_field_id ~ '` && value==null]].id')
+          | length > 0
+        )
+      action:
+        run_playbook:
+          name: rma_request_hardware_id.yml
+          extra_vars:
+            ticket_ids: "{{ event.zendesk.data.results | json_query('[?custom_fields[?id==`' ~ hardware_id_field_id ~ '` && value==null]].id') }}"
+            hardware_id_field_id: "{{ hardware_id_field_id }}"
+
+---
+- name: RMA ticket form configuration check
+  hosts: all
+
+  vars:
+    zendesk_host: "{{ zendesk_host | default('company.zendesk.com') }}"
+    zendesk_auth_header: "{{ zendesk_auth_header }}"
+    rma_form_id: 123456789
+
+  sources:
+    - name: zendesk_ticket_forms
+      custom.zendesk_eda.zendesk_api_pull:
+        zendesk_host: "{{ zendesk_host }}"
+        zendesk_encrypted_token_header: "{{ zendesk_auth_header }}"
+        endpoint: "/api/v2/ticket_forms.json"
+        query_params:
+          per_page: 100
+        delay: 300
+
+  rules:
+    - name: RMA form inactive
+      condition: >
+        event.zendesk.endpoint == "/api/v2/ticket_forms.json" and
+        event.zendesk.error is not defined and
+        event.zendesk.data.ticket_forms is defined and
+        (
+          event.zendesk.data.ticket_forms
+          | json_query('[?id==`' ~ rma_form_id ~ '` && active==false].id')
+          | length > 0
+        )
+      action:
+        run_playbook:
+          name: rma_form_reactivate.yml
+          extra_vars:
+            rma_form_id: "{{ rma_form_id }}"
+            forms: "{{ event.zendesk.data.ticket_forms | json_query('[?id==`' ~ rma_form_id ~ '`]') }}"

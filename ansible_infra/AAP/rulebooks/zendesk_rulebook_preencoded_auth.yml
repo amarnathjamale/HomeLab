@@ -1,0 +1,79 @@
+---
+# Example rulebook using pre-encoded Authorization header
+# This bypasses all authentication logic and uses the exact header you provide
+
+sources:
+  - name: zendesk_tickets_with_preencoded_auth
+    custom.zendesk_eda.zendesk_api_pull:
+      zendesk_host: "company.zendesk.com"
+      # Pre-encoded Authorization header (use generate_auth_header.sh to create this)
+      # Option 1: Just the Base64 part (plugin adds "Basic " automatically)
+      zendesk_encrypted_token_header: "{{ zendesk_auth_base64 }}"
+      # Option 2: Full header with "Basic " prefix
+      # zendesk_encrypted_token_header: "Basic {{ zendesk_auth_base64 }}"
+      endpoint: "/api/v2/tickets.json"
+      query_params:
+        per_page: 100
+      delay: 60
+
+rules:
+  - name: Log all Zendesk tickets
+    condition: event.zendesk is defined
+    action:
+      debug:
+
+---
+# Example: Using environment variables for credentials
+# 
+# 1. Generate the auth header:
+#    export ZENDESK_AUTH=$(./generate_auth_header.sh email@company.io mytoken token | grep "Base64-encoded" -A 1 | tail -1)
+#
+# 2. Run rulebook:
+#    ansible-rulebook -i inventory.yml --rulebook this_file.yml \
+#      --env-vars ZENDESK_AUTH
+#
+# 3. In rulebook, reference: "{{ ZENDESK_AUTH }}"
+
+---
+# Example: Multiple sources with different endpoints
+
+sources:
+  - name: zendesk_tickets
+    custom.zendesk_eda.zendesk_api_pull:
+      zendesk_host: "company.zendesk.com"
+      zendesk_encrypted_token_header: "{{ zendesk_auth }}"
+      endpoint: "/api/v2/tickets.json"
+      delay: 60
+
+  - name: zendesk_users
+    custom.zendesk_eda.zendesk_api_pull:
+      zendesk_host: "company.zendesk.com"
+      zendesk_encrypted_token_header: "{{ zendesk_auth }}"
+      endpoint: "/api/v2/users.json"
+      delay: 300
+
+  - name: zendesk_organizations
+    custom.zendesk_eda.zendesk_api_pull:
+      zendesk_host: "company.zendesk.com"
+      zendesk_encrypted_token_header: "{{ zendesk_auth }}"
+      endpoint: "/api/v2/organizations.json"
+      delay: 600
+
+rules:
+  - name: Handle tickets
+    condition: event.zendesk.endpoint == "/api/v2/tickets.json"
+    action:
+      debug:
+        msg: "Received {{ event.zendesk.items.count }} tickets"
+
+  - name: Handle users
+    condition: event.zendesk.endpoint == "/api/v2/users.json"
+    action:
+      debug:
+        msg: "Received users data"
+
+  - name: Handle errors
+    condition: event.zendesk.error is defined
+    action:
+      debug:
+        msg: "ERROR: {{ event.zendesk.message }}"

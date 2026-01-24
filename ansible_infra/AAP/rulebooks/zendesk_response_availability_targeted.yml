@@ -1,0 +1,81 @@
+---
+- name: Response availability with targeted endpoints
+  hosts: all
+
+  vars:
+    zendesk_host: "{{ zendesk_host | default('company.zendesk.com') }}"
+    zendesk_auth_header: "{{ zendesk_auth_header }}"
+    awaiting_response_view_id: 123456
+    metric_events_start_time: 1704067200
+
+  sources:
+    - name: zendesk_awaiting_response_view
+      custom.zendesk_eda.zendesk_api_pull:
+        zendesk_host: "{{ zendesk_host }}"
+        zendesk_encrypted_token_header: "{{ zendesk_auth_header }}"
+        endpoint: "/api/v2/views/{{ awaiting_response_view_id }}/tickets.json"
+        query_params:
+          per_page: 25
+        delay: 600
+
+    - name: zendesk_reply_time_events
+      custom.zendesk_eda.zendesk_api_pull:
+        zendesk_host: "{{ zendesk_host }}"
+        zendesk_encrypted_token_header: "{{ zendesk_auth_header }}"
+        endpoint: "/api/v2/incremental/ticket_metric_events.json"
+        query_params:
+          start_time: "{{ metric_events_start_time }}"
+          include_changes: true
+        delay: 300
+
+  rules:
+    - name: Tickets awaiting agent response
+      condition: >
+        event.zendesk.endpoint == "/api/v2/views/{{ awaiting_response_view_id }}/tickets.json" and
+        event.zendesk.error is not defined and
+        event.zendesk.data.tickets is defined and
+        (event.zendesk.data.tickets | length > 0)
+      action:
+        run_playbook:
+          name: response_waiting_followup.yml
+          extra_vars:
+            tickets: "{{ event.zendesk.data.tickets }}"
+            view_id: "{{ awaiting_response_view_id }}"
+
+    - name: First response available
+      condition: >
+        event.zendesk.endpoint == "/api/v2/incremental/ticket_metric_events.json" and
+        event.zendesk.error is not defined and
+        event.zendesk.data.ticket_metric_events is defined and
+        (
+          event.zendesk.data.ticket_metric_events
+          | rejectattr('deleted', 'eq', true)
+          | selectattr('metric', 'eq', 'reply_time')
+          | selectattr('type', 'eq', 'fulfill')
+          | list | length > 0
+        )
+      action:
+        run_playbook:
+          name: response_available.yml
+          extra_vars:
+            ticket_ids: "{{ event.zendesk.data.ticket_metric_events | rejectattr('deleted', 'eq', true) | selectattr('metric', 'eq', 'reply_time') | selectattr('type', 'eq', 'fulfill') | map(attribute='ticket_id') | list }}"
+            response_events: "{{ event.zendesk.data.ticket_metric_events | rejectattr('deleted', 'eq', true) | selectattr('metric', 'eq', 'reply_time') | selectattr('type', 'eq', 'fulfill') | list }}"
+
+    - name: Response SLA breach
+      condition: >
+        event.zendesk.endpoint == "/api/v2/incremental/ticket_metric_events.json" and
+        event.zendesk.error is not defined and
+        event.zendesk.data.ticket_metric_events is defined and
+        (
+          event.zendesk.data.ticket_metric_events
+          | rejectattr('deleted', 'eq', true)
+          | selectattr('metric', 'eq', 'reply_time')
+          | selectattr('type', 'eq', 'breach')
+          | list | length > 0
+        )
+      action:
+        run_playbook:
+          name: response_sla_breach.yml
+          extra_vars:
+            ticket_ids: "{{ event.zendesk.data.ticket_metric_events | rejectattr('deleted', 'eq', true) | selectattr('metric', 'eq', 'reply_time') | selectattr('type', 'eq', 'breach') | map(attribute='ticket_id') | list }}"
+            breach_events: "{{ event.zendesk.data.ticket_metric_events | rejectattr('deleted', 'eq', true) | selectattr('metric', 'eq', 'reply_time') | selectattr('type', 'eq', 'breach') | list }}"

@@ -1,0 +1,28 @@
+---
+# Simple test rulebook to verify the Zendesk source plugin is found
+#
+# Usage with environment variables:
+#   export ZENDESK_EMAIL="your-email@company.com"
+#   export ZENDESK_API_TOKEN="your-api-token"
+#   export ZENDESK_HOST="your-company.zendesk.com"
+#
+#   ansible-rulebook -i inventory.yml --rulebook test_zendesk_plugin.yml
+
+- name: Test Zendesk Plugin
+  hosts: localhost
+  
+  sources:
+    - name: test_zendesk
+      custom.zendesk_eda.zendesk_api_pull:
+        zendesk_email: "test@example.com"
+        zendesk_api_token: "test_token_12345"
+        zendesk_host: "test.zendesk.com"
+        endpoint: "/api/v2/tickets.json"
+        delay: 60
+
+  rules:
+    - name: Print all events
+      condition: event is defined
+      action:
+        debug:
+          msg: "Event received: {{ event }}"

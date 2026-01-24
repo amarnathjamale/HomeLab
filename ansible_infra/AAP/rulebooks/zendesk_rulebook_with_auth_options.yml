@@ -1,0 +1,175 @@
+---
+# =============================================================================
+# Example 1: Monitor Zendesk Tickets with API Token Authentication
+# =============================================================================
+# This is the RECOMMENDED authentication method for production use
+#
+- name: Monitor Zendesk Tickets (API Token)
+  hosts: localhost
+  
+  sources:
+    - name: zendesk_tickets_token
+      custom.zendesk_eda.zendesk_api_pull:
+        zendesk_email: "{{ zendesk_email }}"
+        zendesk_api_token: "{{ zendesk_api_token }}"
+        zendesk_host: "company.zendesk.com"
+        endpoint: "/api/v2/tickets.json"
+        query_params:
+          per_page: 100
+        delay: 60
+
+  rules:
+    - name: Print Zendesk tickets
+      condition: event.zendesk is defined and event.zendesk.error is not defined
+      action:
+        debug:
+          msg: "Received {{ event.zendesk.items.count }} tickets from Zendesk"
+
+
+---
+# =============================================================================
+# Example 2: Monitor Zendesk Tickets with Password Authentication
+# =============================================================================
+# Alternative authentication using Zendesk account password
+# NOTE: API tokens are more secure and recommended for automation
+#
+- name: Monitor Zendesk Tickets (Password)
+  hosts: localhost
+  
+  sources:
+    - name: zendesk_tickets_password
+      custom.zendesk_eda.zendesk_api_pull:
+        zendesk_email: "{{ zendesk_email }}"
+        zendesk_password: "{{ zendesk_password }}"
+        zendesk_host: "company.zendesk.com"
+        endpoint: "/api/v2/tickets.json"
+        query_params:
+          per_page: 100
+        delay: 60
+
+  rules:
+    - name: Print Zendesk tickets
+      condition: event.zendesk is defined and event.zendesk.error is not defined
+      action:
+        debug:
+          msg: "Received {{ event.zendesk.items.count }} tickets from Zendesk"
+
+
+---
+# =============================================================================
+# Example 3: Monitor Zendesk Users with API Token
+# =============================================================================
+#
+- name: Monitor Zendesk Users
+  hosts: localhost
+  
+  sources:
+    - name: zendesk_users
+      custom.zendesk_eda.zendesk_api_pull:
+        zendesk_email: "{{ zendesk_email }}"
+        zendesk_api_token: "{{ zendesk_api_token }}"
+        zendesk_host: "company.zendesk.com"
+        endpoint: "/api/v2/users.json"
+        delay: 300
+
+  rules:
+    - name: Print Zendesk users
+      condition: event.zendesk is defined and event.zendesk.error is not defined
+      action:
+        debug:
+          msg: "Retrieved {{ event.zendesk.items.count }} users from Zendesk"
+
+
+---
+# =============================================================================
+# Example 4: High Priority Tickets with Automation
+# =============================================================================
+#
+- name: Monitor High Priority Tickets
+  hosts: localhost
+  
+  sources:
+    - name: zendesk_high_priority
+      custom.zendesk_eda.zendesk_api_pull:
+        zendesk_email: "{{ zendesk_email }}"
+        zendesk_api_token: "{{ zendesk_api_token }}"
+        zendesk_host: "company.zendesk.com"
+        endpoint: "/api/v2/tickets.json"
+        query_params:
+          status: "new"
+        delay: 30
+
+  rules:
+    - name: Handle high priority tickets
+      condition: >
+        event.zendesk.data.tickets is defined and
+        event.zendesk.data.tickets | selectattr('priority', 'eq', 'high') | list | length > 0
+      action:
+        run_playbook:
+          name: handle_high_priority_tickets.yml
+          extra_vars:
+            ticket_count: "{{ event.zendesk.data.tickets | selectattr('priority', 'eq', 'high') | list | length }}"
+            tickets: "{{ event.zendesk.data.tickets | selectattr('priority', 'eq', 'high') | list }}"
+
+
+---
+# =============================================================================
+# Example 5: Comprehensive Error Handling
+# =============================================================================
+#
+- name: Monitor Custom Zendesk Endpoint with Error Handling
+  hosts: localhost
+  
+  sources:
+    - name: zendesk_custom
+      custom.zendesk_eda.zendesk_api_pull:
+        zendesk_email: "{{ zendesk_email }}"
+        zendesk_api_token: "{{ zendesk_api_token }}"
+        zendesk_host: "company.zendesk.com"
+        endpoint: "/api/v2/organizations.json"
+        query_params:
+          page: 1
+          per_page: 50
+        delay: 120
+
+  rules:
+    - name: Process successful API calls
+      condition: >
+        event.zendesk is defined and
+        event.zendesk.error is not defined and
+        event.zendesk.data.organizations is defined
+      action:
+        debug:
+          msg: |
+            Retrieved {{ event.zendesk.items.count }} organizations
+            Endpoint: {{ event.zendesk.endpoint }}
+            Timestamp: {{ event.zendesk.timestamp }}
+
+    - name: Handle 401 Authentication errors
+      condition: >
+        event.zendesk is defined and
+        event.zendesk.error is defined and
+        event.zendesk.status_code == 401
+      action:
+        debug:
+          msg: |
+            CRITICAL: Zendesk authentication failed (401)
+            Possible causes:
+            - API token is incorrect or expired
+            - Email address is incorrect
+            - Password is incorrect (if using password auth)
+            - Check auth_format in event data
+            Auth format used: {{ event.zendesk.auth_format | default('N/A') }}
+
+    - name: Handle general API errors
+      condition: >
+        event.zendesk is defined and
+        event.zendesk.error is defined and
+        event.zendesk.status_code != 401
+      action:
+        debug:
+          msg: |
+            ERROR calling Zendesk API
+            Endpoint: {{ event.zendesk.endpoint }}
+            Status: {{ event.zendesk.status_code }}
+            Message: {{ event.zendesk.message }}

@@ -1,0 +1,142 @@
+---
+# =============================================================================
+# Example 1: Monitor Zendesk Tickets
+# =============================================================================
+# This rulebook monitors Zendesk tickets every 60 seconds and prints events
+#
+- name: Monitor Zendesk Tickets
+  hosts: all
+  
+  sources:
+    - name: zendesk_tickets
+      custom.zendesk_eda.zendesk_api_pull:
+        zendesk_email: "{{ zendesk_email }}"
+        zendesk_api_token: "{{ zendesk_api_token }}"
+        zendesk_host: "company.zendesk.com"
+        endpoint: "/api/v2/tickets.json"
+        query_params:
+          per_page: 100
+        delay: 60
+
+  rules:
+    - name: Print Zendesk tickets
+      condition: event.zendesk is defined
+      action:
+        debug:
+          msg: "Received {{ event.zendesk.items.count }} tickets from Zendesk"
+
+
+---
+# =============================================================================
+# Example 2: Monitor Zendesk Users
+# =============================================================================
+# This rulebook monitors Zendesk users every 5 minutes
+#
+- name: Monitor Zendesk Users
+  hosts: all
+  
+  sources:
+    - name: zendesk_users
+      custom.zendesk_eda.zendesk_api_pull:
+        zendesk_email: "{{ zendesk_email }}"
+        zendesk_api_token: "{{ zendesk_api_token }}"
+        zendesk_host: "company.zendesk.com"
+        endpoint: "/api/v2/users.json"
+        delay: 300
+
+  rules:
+    - name: Print Zendesk users
+      condition: event.zendesk is defined and event.zendesk.error is not defined
+      action:
+        debug:
+          msg: "Retrieved {{ event.zendesk.items.count }} users from Zendesk"
+
+
+---
+# =============================================================================
+# Example 3: High Priority Tickets with Automation
+# =============================================================================
+# This monitors high priority tickets and triggers a playbook when found
+#
+- name: Monitor High Priority Tickets
+  hosts: all
+  
+  sources:
+    - name: zendesk_high_priority
+      custom.zendesk_eda.zendesk_api_pull:
+        zendesk_email: "{{ zendesk_email }}"
+        zendesk_api_token: "{{ zendesk_api_token }}"
+        zendesk_host: "company.zendesk.com"
+        endpoint: "/api/v2/tickets.json"
+        query_params:
+          status: "new"
+        delay: 30
+
+  rules:
+    - name: Handle high priority tickets
+      condition: >
+        event.zendesk.data.tickets is defined and
+        event.zendesk.data.tickets | selectattr('priority', 'eq', 'high') | list | length > 0
+      action:
+        run_playbook:
+          name: handle_high_priority_tickets.yml
+          extra_vars:
+            ticket_count: "{{ event.zendesk.data.tickets | selectattr('priority', 'eq', 'high') | list | length }}"
+            tickets: "{{ event.zendesk.data.tickets | selectattr('priority', 'eq', 'high') | list }}"
+
+
+---
+# =============================================================================
+# Example 4: Custom Endpoint with Error Handling
+# =============================================================================
+# This demonstrates using a custom endpoint with comprehensive error handling
+#
+- name: Monitor Custom Zendesk Endpoint
+  hosts: all
+  
+  sources:
+    - name: zendesk_custom
+      custom.zendesk_eda.zendesk_api_pull:
+        zendesk_email: "{{ zendesk_email }}"
+        zendesk_api_token: "{{ zendesk_api_token }}"
+        zendesk_host: "company.zendesk.com"
+        endpoint: "/api/v2/organizations.json"
+        query_params:
+          page: 1
+          per_page: 50
+        delay: 120
+
+  rules:
+    - name: Process successful API calls
+      condition: >
+        event.zendesk is defined and
+        event.zendesk.error is not defined and
+        event.zendesk.data.organizations is defined
+      action:
+        debug:
+          msg: |
+            Retrieved {{ event.zendesk.items.count }} organizations
+            Endpoint: {{ event.zendesk.endpoint }}
+            Timestamp: {{ event.zendesk.timestamp }}
+
+    - name: Handle API errors
+      condition: >
+        event.zendesk is defined and
+        event.zendesk.error is defined
+      action:
+        debug:
+          msg: |
+            ERROR calling Zendesk API
+            Endpoint: {{ event.zendesk.endpoint }}
+            Status: {{ event.zendesk.status_code }}
+            Message: {{ event.zendesk.message }}
+            Timestamp: {{ event.zendesk.timestamp }}
+
+    - name: Handle authentication errors
+      condition: >
+        event.zendesk is defined and
+        event.zendesk.error is defined and
+        event.zendesk.status_code == 401
+      action:
+        debug:
+          msg: "CRITICAL: Zendesk authentication failed. Please check credentials."

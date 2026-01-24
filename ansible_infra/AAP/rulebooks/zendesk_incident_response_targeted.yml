@@ -1,0 +1,36 @@
+---
+- name: Incident response targeted search
+  hosts: all
+
+  vars:
+    zendesk_host: "{{ zendesk_host | default('company.zendesk.com') }}"
+    zendesk_auth_header: "{{ zendesk_auth_header }}"
+    incident_status: "open"
+    incident_response_tag: "incident_response"
+
+  sources:
+    - name: zendesk_incident_response_search
+      custom.zendesk_eda.zendesk_api_pull:
+        zendesk_host: "{{ zendesk_host }}"
+        zendesk_encrypted_token_header: "{{ zendesk_auth_header }}"
+        endpoint: "/api/v2/search.json"
+        query_params:
+          query: "type:ticket status:{{ incident_status }} type:incident tags:{{ incident_response_tag }}"
+          sort_by: "updated_at"
+          sort_order: "desc"
+        delay: 300
+
+  rules:
+    - name: Incident response tickets detected
+      condition: >
+        event.zendesk.endpoint == "/api/v2/search.json" and
+        event.zendesk.error is not defined and
+        event.zendesk.data.results is defined and
+        (event.zendesk.data.results | length > 0)
+      action:
+        run_playbook:
+          name: incident_response_targeted.yml
+          extra_vars:
+            tickets: "{{ event.zendesk.data.results }}"
+            incident_status: "{{ incident_status }}"
+            incident_response_tag: "{{ incident_response_tag }}"

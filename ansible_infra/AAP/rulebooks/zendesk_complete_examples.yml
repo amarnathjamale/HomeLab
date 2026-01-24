@@ -1,0 +1,537 @@
+---
+# =============================================================================
+# Zendesk EDA Plugin - Complete Examples with All Authentication Methods
+# =============================================================================
+
+# =============================================================================
+# AUTHENTICATION OPTIONS
+# =============================================================================
+# Choose ONE of the following authentication methods:
+#
+# Option 1: API Token (automatic encoding by plugin)
+# Option 2: Password (automatic encoding by plugin)
+# Option 3: Pre-encoded Authorization Header (recommended for troubleshooting)
+#
+# For Option 3, generate the header with:
+#   ./generate_auth_header.sh email@company.io YOUR_TOKEN token
+# Or manually:
+#   echo -n 'email@company.io/token:YOUR_TOKEN' | base64 | tr -d '\n'
+
+
+---
+# =============================================================================
+# Example 1: Using API Token (Automatic Encoding)
+# =============================================================================
+- name: Monitor Zendesk Tickets with API Token
+  hosts: all
+  
+  sources:
+    - name: zendesk_tickets
+      custom.zendesk_eda.zendesk_api_pull:
+        zendesk_email: "{{ zendesk_email }}"
+        zendesk_api_token: "{{ zendesk_api_token }}"
+        zendesk_host: "company.zendesk.com"
+        endpoint: "/api/v2/tickets.json"
+        query_params:
+          per_page: 100
+        delay: 60
+
+  rules:
+    - name: Print ticket count
+      condition: event.zendesk is defined
+      action:
+        debug:
+          msg: "Received {{ event.zendesk.items.count }} tickets"
+
+
+---
+# =============================================================================
+# Example 2: Using Password (Automatic Encoding)
+# =============================================================================
+- name: Monitor Zendesk with Password Auth
+  hosts: all
+  
+  sources:
+    - name: zendesk_tickets
+      custom.zendesk_eda.zendesk_api_pull:
+        zendesk_email: "{{ zendesk_email }}"
+        zendesk_password: "{{ zendesk_password }}"
+        zendesk_host: "company.zendesk.com"
+        endpoint: "/api/v2/tickets.json"
+        delay: 60
+
+  rules:
+    - name: Print tickets
+      condition: event.zendesk is defined
+      action:
+        debug:
+
+
+---
+# =============================================================================
+# Example 3: Using Pre-encoded Header (RECOMMENDED for Troubleshooting)
+# =============================================================================
+# This method bypasses all encoding logic and uses your exact header!
+# Perfect when curl works but the plugin doesn't.
+#
+# Step 1: Generate the header:
+#   ./generate_auth_header.sh your-email@company.io your-token token
+#
+# Step 2: Test with curl:
+#   curl -H 'Authorization: Basic YOUR_BASE64_HERE' \
+#     'https://company.zendesk.com/api/v2/tickets.json'
+#
+# Step 3: If curl works, use that EXACT base64 below!
+
+- name: Monitor Zendesk with Pre-encoded Auth
+  hosts: all
+  
+  sources:
+    - name: zendesk_tickets
+      custom.zendesk_eda.zendesk_api_pull:
+        zendesk_host: "company.zendesk.com"
+        # Use the Base64 string that works with curl:
+        zendesk_encrypted_token_header: "{{ zendesk_auth_header }}"
+        endpoint: "/api/v2/tickets.json"
+        query_params:
+          per_page: 100
+        delay: 60
+
+  rules:
+    - name: Print tickets
+      condition: event.zendesk is defined and event.zendesk.error is not defined
+      action:
+        debug:
+          msg: "✅ SUCCESS! Received {{ event.zendesk.items.count }} tickets"
+
+    - name: Handle auth errors
+      condition: event.zendesk.error is defined and event.zendesk.status_code == 401
+      action:
+        debug:
+          msg: |
+            ❌ 401 Authentication Error
+            If curl works but this fails, verify the base64 header matches exactly!
+
+
+---
+# =============================================================================
+# Example 4: Multiple Endpoints with Pre-encoded Auth
+# =============================================================================
+- name: Monitor Multiple Zendesk Endpoints
+  hosts: all
+  
+  sources:
+    - name: zendesk_tickets
+      custom.zendesk_eda.zendesk_api_pull:
+        zendesk_host: "company.zendesk.com"
+        zendesk_encrypted_token_header: "{{ zendesk_auth_header }}"
+        endpoint: "/api/v2/tickets.json"
+        query_params:
+          per_page: 100
+        delay: 60
+
+    - name: zendesk_users
+      custom.zendesk_eda.zendesk_api_pull:
+        zendesk_host: "company.zendesk.com"
+        zendesk_encrypted_token_header: "{{ zendesk_auth_header }}"
+        endpoint: "/api/v2/users.json"
+        delay: 300
+
+    - name: zendesk_organizations
+      custom.zendesk_eda.zendesk_api_pull:
+        zendesk_host: "company.zendesk.com"
+        zendesk_encrypted_token_header: "{{ zendesk_auth_header }}"
+        endpoint: "/api/v2/organizations.json"
+        delay: 600
+
+  rules:
+    - name: Handle tickets
+      condition: event.zendesk.endpoint == "/api/v2/tickets.json"
+      action:
+        debug:
+          msg: "Tickets: {{ event.zendesk.items.count }}"
+
+    - name: Handle users
+      condition: event.zendesk.endpoint == "/api/v2/users.json"
+      action:
+        debug:
+          msg: "Users: {{ event.zendesk.items.count }}"
+
+    - name: Handle organizations
+      condition: event.zendesk.endpoint == "/api/v2/organizations.json"
+      action:
+        debug:
+          msg: "Organizations: {{ event.zendesk.items.count }}"
+
+
+---
+# =============================================================================
+# Example 5: High Priority Tickets with Automation
+# =============================================================================
+- name: Monitor High Priority Tickets
+  hosts: all
+  
+  sources:
+    - name: zendesk_high_priority
+      custom.zendesk_eda.zendesk_api_pull:
+        zendesk_host: "company.zendesk.com"
+        zendesk_encrypted_token_header: "{{ zendesk_auth_header }}"
+        endpoint: "/api/v2/tickets.json"
+        query_params:
+          status: "new"
+        delay: 30
+
+  rules:
+    - name: Trigger automation for high priority
+      condition: >
+        event.zendesk.data.tickets is defined and
+        event.zendesk.data.tickets | selectattr('priority', 'eq', 'high') | list | length > 0
+      action:
+        run_playbook:
+          name: handle_high_priority_tickets.yml
+          extra_vars:
+            ticket_count: "{{ event.zendesk.data.tickets | selectattr('priority', 'eq', 'high') | list | length }}"
+            tickets: "{{ event.zendesk.data.tickets | selectattr('priority', 'eq', 'high') | list }}"
+
+
+---
+# =============================================================================
+# Example 6: Comprehensive Error Handling
+# =============================================================================
+- name: Zendesk with Full Error Handling
+  hosts: all
+  
+  sources:
+    - name: zendesk_api
+      custom.zendesk_eda.zendesk_api_pull:
+        zendesk_host: "company.zendesk.com"
+        zendesk_encrypted_token_header: "{{ zendesk_auth_header }}"
+        endpoint: "/api/v2/tickets.json"
+        delay: 60
+
+  rules:
+    - name: Success - Process tickets
+      condition: >
+        event.zendesk is defined and
+        event.zendesk.error is not defined
+      action:
+        debug:
+          msg: |
+            ✅ SUCCESS
+            Endpoint: {{ event.zendesk.endpoint }}
+            Items: {{ event.zendesk.items.count }}
+            Timestamp: {{ event.zendesk.timestamp }}
+
+    - name: Error - Authentication (401)
+      condition: >
+        event.zendesk.error is defined and
+        event.zendesk.status_code == 401
+      action:
+        debug:
+          msg: |
+            ❌ AUTHENTICATION ERROR (401)
+            
+            Your credentials are invalid or the auth header is malformed.
+            
+            To fix:
+            1. Generate header: ./generate_auth_header.sh email@company.io TOKEN token
+            2. Test with curl: curl -H 'Authorization: Basic BASE64' https://company.zendesk.com/api/v2/tickets.json
+            3. If curl works, use that exact BASE64 in zendesk_encrypted_token_header
+            
+            Message: {{ event.zendesk.message }}
+
+    - name: Error - Not Found (404)
+      condition: >
+        event.zendesk.error is defined and
+        event.zendesk.status_code == 404
+      action:
+        debug:
+          msg: |
+            ❌ NOT FOUND (404)
+            Endpoint: {{ event.zendesk.endpoint }}
+            Verify the endpoint path is correct.
+
+    - name: Error - Rate Limit (429)
+      condition: >
+        event.zendesk.error is defined and
+        event.zendesk.status_code == 429
+      action:
+        debug:
+          msg: |
+            ⚠️ RATE LIMIT (429)
+            Increase the delay parameter to slow down polling.
+
+    - name: Error - Server Error (5xx)
+      condition: >
+        event.zendesk.error is defined and
+        event.zendesk.status_code >= 500
+      action:
+        debug:
+          msg: |
+            ⚠️ SERVER ERROR ({{ event.zendesk.status_code }})
+            Zendesk is experiencing issues. Will retry automatically.
+
+    - name: Error - Other
+      condition: >
+        event.zendesk.error is defined and
+        event.zendesk.status_code not in [401, 404, 429]
+      action:
+        debug:
+          msg: |
+            ❌ ERROR ({{ event.zendesk.status_code | default('unknown') }})
+            Message: {{ event.zendesk.message }}
+
+
+---
+# =============================================================================
+# Example 7: Ops View + Ticket Events (Endpoint Combination)
+# =============================================================================
+- name: Ops View and Ticket Events
+  hosts: all
+
+  vars:
+    ops_view_id: 123456
+    ticket_event_start_time: 1704067200
+
+  sources:
+    - name: zendesk_ops_view
+      custom.zendesk_eda.zendesk_api_pull:
+        zendesk_host: "company.zendesk.com"
+        zendesk_encrypted_token_header: "{{ zendesk_auth_header }}"
+        endpoint: "/api/v2/views/{{ ops_view_id }}/tickets.json"
+        query_params:
+          per_page: 100
+        delay: 60
+
+    - name: zendesk_ticket_events
+      custom.zendesk_eda.zendesk_api_pull:
+        zendesk_host: "company.zendesk.com"
+        zendesk_encrypted_token_header: "{{ zendesk_auth_header }}"
+        endpoint: "/api/v2/incremental/ticket_events.json"
+        query_params:
+          start_time: "{{ ticket_event_start_time }}"
+        delay: 45
+
+  rules:
+    - name: Ops queue urgent incidents
+      condition: >
+        event.zendesk.endpoint == "/api/v2/views/{{ ops_view_id }}/tickets.json" and
+        event.zendesk.error is not defined and
+        event.zendesk.data.tickets is defined and
+        (
+          event.zendesk.data.tickets
+          | selectattr('type', 'eq', 'incident')
+          | selectattr('priority', 'in', ['high', 'urgent'])
+          | list | length > 0
+        )
+      action:
+        run_playbook:
+          name: ops_incident_triage.yml
+          extra_vars:
+            tickets: "{{ event.zendesk.data.tickets | selectattr('type', 'eq', 'incident') | selectattr('priority', 'in', ['high', 'urgent']) | list }}"
+            view_id: "{{ ops_view_id }}"
+
+    - name: Comment mentions ansible
+      condition: >
+        event.zendesk.endpoint == "/api/v2/incremental/ticket_events.json" and
+        event.zendesk.error is not defined and
+        event.zendesk.data.ticket_events is defined and
+        (
+          event.zendesk.data.ticket_events
+          | json_query("[?child_events[?type==`Comment` && contains(body, `ansible`)]].ticket_id")
+          | length > 0
+        )
+      action:
+        run_playbook:
+          name: ansible_comment_followup.yml
+          extra_vars:
+            ticket_ids: "{{ event.zendesk.data.ticket_events | json_query('[?child_events[?type==`Comment` && contains(body, `ansible`)]].ticket_id') }}"
+
+
+---
+# =============================================================================
+# Example 8: RMA Status Change Automation
+# =============================================================================
+- name: RMA Status Change
+  hosts: all
+
+  vars:
+    rma_type_field_id: 123456789
+    rma_status_field_id: 987654321
+    ticket_event_start_time: 1704067200
+
+  sources:
+    - name: zendesk_rma_events
+      custom.zendesk_eda.zendesk_api_pull:
+        zendesk_host: "company.zendesk.com"
+        zendesk_encrypted_token_header: "{{ zendesk_auth_header }}"
+        endpoint: "/api/v2/incremental/ticket_events.json"
+        query_params:
+          start_time: "{{ ticket_event_start_time }}"
+        delay: 30
+
+  rules:
+    - name: RMA moved to ready to ship
+      condition: >
+        event.zendesk.endpoint == "/api/v2/incremental/ticket_events.json" and
+        event.zendesk.error is not defined and
+        event.zendesk.data.ticket_events is defined and
+        (
+          event.zendesk.data.ticket_events
+          | json_query('[?child_events[?field_name==`custom_fields_' ~ rma_type_field_id ~ '` && value==`rma`] && child_events[?field_name==`custom_fields_' ~ rma_status_field_id ~ '` && value==`ready_to_ship`]].ticket_id')
+          | length > 0
+        )
+      action:
+        run_playbook:
+          name: rma_status_change.yml
+          extra_vars:
+            ticket_ids: "{{ event.zendesk.data.ticket_events | json_query('[?child_events[?field_name==`custom_fields_' ~ rma_type_field_id ~ '` && value==`rma`] && child_events[?field_name==`custom_fields_' ~ rma_status_field_id ~ '` && value==`ready_to_ship`]].ticket_id') }}"
+            new_rma_status: "ready_to_ship"
+
+
+---
+# =============================================================================
+# Example 9: Standard Ticket Types Automation
+# =============================================================================
+- name: Standard Ticket Type Operations
+  hosts: all
+
+  sources:
+    - name: zendesk_standard_tickets
+      custom.zendesk_eda.zendesk_api_pull:
+        zendesk_host: "company.zendesk.com"
+        zendesk_encrypted_token_header: "{{ zendesk_auth_header }}"
+        endpoint: "/api/v2/tickets.json"
+        query_params:
+          status: "new,open"
+          per_page: 100
+        delay: 60
+
+  rules:
+    - name: Incident escalation for urgent tickets
+      condition: >
+        event.zendesk.error is not defined and
+        event.zendesk.data.tickets is defined and
+        (
+          event.zendesk.data.tickets
+          | selectattr('type', 'eq', 'incident')
+          | selectattr('priority', 'in', ['high', 'urgent'])
+          | list | length > 0
+        )
+      action:
+        run_playbook:
+          name: incident_escalation.yml
+          extra_vars:
+            tickets: "{{ event.zendesk.data.tickets | selectattr('type', 'eq', 'incident') | selectattr('priority', 'in', ['high', 'urgent']) | list }}"
+
+    - name: Problem tickets needing root cause
+      condition: >
+        event.zendesk.error is not defined and
+        event.zendesk.data.tickets is defined and
+        (
+          event.zendesk.data.tickets
+          | selectattr('type', 'eq', 'problem')
+          | selectattr('tags', 'contains', 'root_cause')
+          | list | length > 0
+        )
+      action:
+        run_playbook:
+          name: problem_root_cause.yml
+          extra_vars:
+            tickets: "{{ event.zendesk.data.tickets | selectattr('type', 'eq', 'problem') | selectattr('tags', 'contains', 'root_cause') | list }}"
+
+    - name: Task tickets for scheduled maintenance
+      condition: >
+        event.zendesk.error is not defined and
+        event.zendesk.data.tickets is defined and
+        (
+          event.zendesk.data.tickets
+          | selectattr('type', 'eq', 'task')
+          | selectattr('tags', 'contains', 'maintenance')
+          | list | length > 0
+        )
+      action:
+        run_playbook:
+          name: schedule_maintenance.yml
+          extra_vars:
+            tickets: "{{ event.zendesk.data.tickets | selectattr('type', 'eq', 'task') | selectattr('tags', 'contains', 'maintenance') | list }}"
+
+    - name: Question tickets with self service routing
+      condition: >
+        event.zendesk.error is not defined and
+        event.zendesk.data.tickets is defined and
+        (
+          event.zendesk.data.tickets
+          | selectattr('type', 'eq', 'question')
+          | selectattr('tags', 'contains', 'self_service')
+          | list | length > 0
+        )
+      action:
+        run_playbook:
+          name: question_auto_response.yml
+          extra_vars:
+            tickets: "{{ event.zendesk.data.tickets | selectattr('type', 'eq', 'question') | selectattr('tags', 'contains', 'self_service') | list }}"
+
+
+---
+# =============================================================================
+# Example 10: Sunbird DCIM Hardware ID Replacement
+# =============================================================================
+- name: Sunbird DCIM Hardware ID Swap
+  hosts: all
+
+  vars:
+    hardware_old_field_id: 111111111
+    hardware_new_field_id: 222222222
+
+  sources:
+    - name: zendesk_dcim_swap
+      custom.zendesk_eda.zendesk_api_pull:
+        zendesk_host: "company.zendesk.com"
+        zendesk_encrypted_token_header: "{{ zendesk_auth_header }}"
+        endpoint: "/api/v2/search.json"
+        query_params:
+          query: "type:ticket status:open tags:dcim_swap"
+        delay: 90
+
+  rules:
+    - name: DCIM hardware ID replacement requested
+      condition: >
+        event.zendesk.error is not defined and
+        event.zendesk.data.results is defined and
+        (
+          event.zendesk.data.results
+          | json_query('[?custom_fields[?id==`' ~ hardware_old_field_id ~ '` && value!=null] && custom_fields[?id==`' ~ hardware_new_field_id ~ '` && value!=null]].id')
+          | length > 0
+        )
+      action:
+        run_playbook:
+          name: sunbird_replace_hardware_id.yml
+          extra_vars:
+            tickets: "{{ event.zendesk.data.results | json_query('[?custom_fields[?id==`' ~ hardware_old_field_id ~ '` && value!=null] && custom_fields[?id==`' ~ hardware_new_field_id ~ '` && value!=null]]') }}"
+            hardware_old_field_id: "{{ hardware_old_field_id }}"
+            hardware_new_field_id: "{{ hardware_new_field_id }}"
+
+
+---
+# =============================================================================
+# TIPS FOR AUTHENTICATION
+# =============================================================================
+#
+# If you're getting 401 errors:
+#
+# 1. Use Pre-encoded Header (Example 3):
+#    - Generate: ./generate_auth_header.sh email@company.io TOKEN token
+#    - Test with curl: curl -H 'Authorization: Basic BASE64' https://...
+#    - If curl works → use that exact BASE64 in the rulebook
+#
+# 2. Common Issues:
+#    - Base64 on multiple lines (use: | base64 | tr -d '\n')
+#    - Wrong credentials format (token needs email/token:TOKEN)
+#    - Expired/invalid API token (create new token in Zendesk)
+#    - Wrong Zendesk host (should be subdomain.zendesk.com)
+#
+# 3. Debugging:
+#    - Check AAP logs for the actual Authorization header sent
+#    - Compare with what curl sends (curl -v shows headers)
+#    - Verify credentials work in Zendesk admin panel

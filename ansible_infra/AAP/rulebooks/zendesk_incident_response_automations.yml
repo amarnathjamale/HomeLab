@@ -1,0 +1,66 @@
+---
+- name: Incident response automation
+  hosts: all
+
+  vars:
+    zendesk_host: "{{ zendesk_host | default('company.zendesk.com') }}"
+    zendesk_auth_header: "{{ zendesk_auth_header }}"
+    incident_response_tag: "incident_response"
+
+  sources:
+    - name: zendesk_incident_response
+      custom.zendesk_eda.zendesk_api_pull:
+        zendesk_host: "{{ zendesk_host }}"
+        zendesk_encrypted_token_header: "{{ zendesk_auth_header }}"
+        endpoint: "/api/v2/search.json"
+        query_params:
+          query: "type:ticket status:open type:incident tags:{{ incident_response_tag }}"
+          sort_by: "updated_at"
+          sort_order: "desc"
+        delay: 45
+
+  rules:
+    - name: Dispatch incident response playbook
+      condition: >
+        event.zendesk.endpoint == "/api/v2/search.json" and
+        event.zendesk.error is not defined and
+        event.zendesk.data.results is defined and
+        (event.zendesk.data.results | length > 0)
+      action:
+        run_playbook:
+          name: incident_response_dispatch.yml
+          extra_vars:
+            tickets: "{{ event.zendesk.data.results }}"
+            tag: "{{ incident_response_tag }}"
+
+    - name: Escalate urgent incident response tickets
+      condition: >
+        event.zendesk.endpoint == "/api/v2/search.json" and
+        event.zendesk.error is not defined and
+        event.zendesk.data.results is defined and
+        (
+          event.zendesk.data.results
+          | json_query('[?priority==`urgent` || priority==`high`].id')
+          | length > 0
+        )
+      action:
+        run_playbook:
+          name: incident_response_escalation.yml
+          extra_vars:
+            ticket_ids: "{{ event.zendesk.data.results | json_query('[?priority==`urgent` || priority==`high`].id') }}"
+
+    - name: Link incidents without problem record
+      condition: >
+        event.zendesk.endpoint == "/api/v2/search.json" and
+        event.zendesk.error is not defined and
+        event.zendesk.data.results is defined and
+        (
+          event.zendesk.data.results
+          | json_query('[?problem_id==null].id')
+          | length > 0
+        )
+      action:
+        run_playbook:
+          name: incident_link_problem.yml
+          extra_vars:
+            ticket_ids: "{{ event.zendesk.data.results | json_query('[?problem_id==null].id') }}"

@@ -1,0 +1,59 @@
+---
+# Simple Zendesk EDA Rulebook - Pre-encoded Auth (Recommended)
+#
+# This is the simplest example using pre-encoded authentication.
+# Perfect for troubleshooting 401 errors!
+#
+# Setup:
+#   1. Generate auth header:
+#      ./generate_auth_header.sh your-email@company.io your-api-token token
+#
+#   2. Copy the Base64 output
+#
+#   3. Test with curl:
+#      curl -H 'Authorization: Basic YOUR_BASE64' \
+#        'https://company.zendesk.com/api/v2/tickets.json'
+#
+#   4. If curl works, replace YOUR_BASE64_HERE below with that value
+#
+# Usage:
+#   ansible-rulebook -i inventory.yml --rulebook zendesk_simple.yml
+
+- name: Monitor Zendesk Tickets
+  hosts: all
+
+  sources:
+    - name: zendesk_tickets
+      custom.zendesk_eda.zendesk_api_pull:
+        zendesk_host: "company.zendesk.com"
+        zendesk_encrypted_token_header: "YOUR_BASE64_HERE"
+        endpoint: "/api/v2/tickets.json"
+        query_params:
+          per_page: 100
+        delay: 60
+
+  rules:
+    - name: Log ticket events
+      condition: event.zendesk is defined
+      action:
+        debug:
+          msg: "Received {{ event.zendesk.items.count }} tickets from Zendesk"
+
+
+# =============================================================================
+# Using AAP Credentials:
+# =============================================================================
+# 
+# In AAP, store the Base64 value as a credential and reference it:
+#
+# sources:
+#   - name: zendesk_tickets
+#     custom.zendesk_eda.zendesk_api_pull:
+#       zendesk_host: "{{ zendesk_host }}"
+#       zendesk_encrypted_token_header: "{{ zendesk_auth_header }}"
+#       endpoint: "/api/v2/tickets.json"
+#       delay: 60
+#
+# Then inject these from AAP credentials:
+#   - zendesk_host
+#   - zendesk_auth_header

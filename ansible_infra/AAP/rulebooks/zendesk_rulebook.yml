@@ -1,0 +1,149 @@
+---
+# Example Rulebook: Zendesk API Pull Source Plugin
+#
+# This rulebook demonstrates how to use the zendesk_api_pull source plugin
+# to poll Zendesk API endpoints and trigger automation based on events.
+#
+# Usage:
+#   ansible-rulebook -i inventory --rulebook zendesk_rulebook.yml \
+#     -e zendesk_email="user@company.com" \
+#     -e zendesk_token="your_api_token_here"
+
+- name: Monitor Zendesk Tickets
+  hosts: localhost
+  
+  sources:
+    - name: zendesk_tickets
+      zendesk_api_pull:
+        zendesk_email: "{{ zendesk_email }}"
+        zendesk_api_token: "{{ zendesk_token }}"
+        zendesk_host: "company.zendesk.com"
+        endpoint: "/api/v2/tickets.json"
+        query_params:
+          per_page: 100
+          status: "open"
+        delay: 60
+  
+  rules:
+    - name: Process new tickets
+      condition: event.zendesk.items.count is defined and event.zendesk.items.count > 0
+      action:
+        debug:
+          msg: "Received {{ event.zendesk.items.count }} tickets from {{ event.zendesk.host }}"
+    
+    - name: Handle API errors
+      condition: event.zendesk.error is defined and event.zendesk.error == true
+      action:
+        debug:
+          msg: "API Error: {{ event.zendesk.message }} (Status: {{ event.zendesk.status_code }})"
+
+---
+# Example: Monitor Zendesk Users
+- name: Monitor Zendesk Users
+  hosts: localhost
+  
+  sources:
+    - name: zendesk_users
+      zendesk_api_pull:
+        zendesk_email: "{{ zendesk_email }}"
+        zendesk_api_token: "{{ zendesk_token }}"
+        zendesk_host: "company.zendesk.com"
+        endpoint: "/api/v2/users.json"
+        query_params:
+          role: "agent"
+        delay: 300
+  
+  rules:
+    - name: Process user updates
+      condition: event.zendesk.items.count is defined
+      action:
+        debug:
+          msg: "Retrieved {{ event.zendesk.items.count }} users from Zendesk"
+
+---
+# Example: Advanced ticket monitoring with filtering
+- name: Monitor High Priority Tickets
+  hosts: localhost
+  
+  sources:
+    - name: zendesk_high_priority
+      zendesk_api_pull:
+        zendesk_email: "{{ zendesk_email }}"
+        zendesk_api_token: "{{ zendesk_token }}"
+        zendesk_host: "company.zendesk.com"
+        endpoint: "/api/v2/tickets.json"
+        query_params:
+          status: "open"
+          priority: "high,urgent"
+          per_page: 50
+        delay: 30
+  
+  rules:
+    - name: Alert on high priority tickets
+      condition: >
+        event.zendesk.items.count is defined and 
+        event.zendesk.items.count > 0 and
+        event.zendesk.error is not defined
+      action:
+        run_playbook:
+          name: alert_team.yml
+          extra_vars:
+            ticket_count: "{{ event.zendesk.items.count }}"
+            tickets: "{{ event.zendesk.data.tickets }}"
+    
+    - name: Log successful polls
+      condition: event.zendesk.error is not defined
+      action:
+        debug:
+          msg: "Polled at {{ event.zendesk.timestamp }}: {{ event.zendesk.items.count }} high priority tickets"
+
+---
+# Example: Custom endpoint with error handling
+- name: Monitor Custom Zendesk Endpoint
+  hosts: localhost
+  
+  sources:
+    - name: zendesk_custom
+      zendesk_api_pull:
+        zendesk_email: "{{ zendesk_email }}"
+        zendesk_api_token: "{{ zendesk_token }}"
+        zendesk_host: "company.zendesk.com"
+        endpoint: "/api/v2/views/12345/tickets.json"
+        query_params:
+          per_page: 25
+        delay: 120
+  
+  rules:
+    - name: Process custom view tickets
+      condition: >
+        event.zendesk.data is defined and
+        event.zendesk.error is not defined
+      action:
+        debug:
+          msg: |
+            Custom view poll completed:
+            - Endpoint: {{ event.zendesk.endpoint }}
+            - Items: {{ event.zendesk.items.count }}
+            - Timestamp: {{ event.zendesk.timestamp }}
+    
+    - name: Handle authentication errors
+      condition: >
+        event.zendesk.error is defined and
+        event.zendesk.status_code == 401
+      action:
+        debug:
+          msg: "Authentication failed - check Zendesk credentials"
+    
+    - name: Handle rate limiting
+      condition: >
+        event.zendesk.error is defined and
+        event.zendesk.status_code == 429
+      action:
+        debug:
+          msg: "Rate limit exceeded - consider increasing delay parameter"
+    
+    - name: Handle general errors
+      condition: event.zendesk.error is defined
+      action:
+        debug:
+          msg: "Error polling Zendesk: {{ event.zendesk.message }}"

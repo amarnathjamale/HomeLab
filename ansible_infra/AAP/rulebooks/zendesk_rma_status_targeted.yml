@@ -1,0 +1,38 @@
+---
+- name: RMA tickets with targeted search query
+  hosts: all
+
+  vars:
+    zendesk_host: "{{ zendesk_host | default('company.zendesk.com') }}"
+    zendesk_auth_header: "{{ zendesk_auth_header }}"
+    rma_field_id: 123456789
+    rma_field_value: "rma"
+    rma_status: "open"
+
+  sources:
+    - name: zendesk_rma_status_search
+      custom.zendesk_eda.zendesk_api_pull:
+        zendesk_host: "{{ zendesk_host }}"
+        zendesk_encrypted_token_header: "{{ zendesk_auth_header }}"
+        endpoint: "/api/v2/search.json"
+        query_params:
+          query: "type:ticket status:{{ rma_status }} custom_field_{{ rma_field_id }}:{{ rma_field_value }}"
+          sort_by: "updated_at"
+          sort_order: "desc"
+        delay: 300
+
+  rules:
+    - name: RMA tickets at target status
+      condition: >
+        event.zendesk.endpoint == "/api/v2/search.json" and
+        event.zendesk.error is not defined and
+        event.zendesk.data.results is defined and
+        (event.zendesk.data.results | length > 0)
+      action:
+        run_playbook:
+          name: rma_status_targeted.yml
+          extra_vars:
+            tickets: "{{ event.zendesk.data.results }}"
+            rma_status: "{{ rma_status }}"
+            rma_field_id: "{{ rma_field_id }}"
+            rma_field_value: "{{ rma_field_value }}"

@@ -1,0 +1,39 @@
+---
+- name: Response availability with metric events
+  hosts: all
+
+  vars:
+    zendesk_host: "{{ zendesk_host | default('company.zendesk.com') }}"
+    zendesk_auth_header: "{{ zendesk_auth_header }}"
+    metric_events_start_time: 1704067200
+
+  sources:
+    - name: zendesk_response_metrics
+      custom.zendesk_eda.zendesk_api_pull:
+        zendesk_host: "{{ zendesk_host }}"
+        zendesk_encrypted_token_header: "{{ zendesk_auth_header }}"
+        endpoint: "/api/v2/incremental/ticket_metric_events.json"
+        query_params:
+          start_time: "{{ metric_events_start_time }}"
+          include_changes: true
+        delay: 300
+
+  rules:
+    - name: First response events
+      condition: >
+        event.zendesk.endpoint == "/api/v2/incremental/ticket_metric_events.json" and
+        event.zendesk.error is not defined and
+        event.zendesk.data.ticket_metric_events is defined and
+        (
+          event.zendesk.data.ticket_metric_events
+          | rejectattr('deleted', 'eq', true)
+          | selectattr('metric', 'eq', 'reply_time')
+          | selectattr('type', 'eq', 'fulfill')
+          | list | length > 0
+        )
+      action:
+        run_playbook:
+          name: response_available_targeted.yml
+          extra_vars:
+            ticket_ids: "{{ event.zendesk.data.ticket_metric_events | rejectattr('deleted', 'eq', true) | selectattr('metric', 'eq', 'reply_time') | selectattr('type', 'eq', 'fulfill') | map(attribute='ticket_id') | list }}"
+            response_events: "{{ event.zendesk.data.ticket_metric_events | rejectattr('deleted', 'eq', true) | selectattr('metric', 'eq', 'reply_time') | selectattr('type', 'eq', 'fulfill') | list }}"
